@@ -13,7 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-define('YT_DEBUG', false);
+define('YT_VIOLENT', true);
+define('YT_VERBOSE', false);
 define('YT_LANG_FILTER', 'en');
 
 
@@ -57,7 +58,7 @@ class YTMachine
 
             $listResults = $this->getYoutube()->search->listSearch('id,snippet', $criteria->getArray());
 
-            if (YT_DEBUG && $nextPageToken == null) {
+            if (YT_VERBOSE && $nextPageToken == null) {
                 $totalResults = $listResults->getPageInfo()->totalResults;
                 $perPageResults = $listResults->getPageInfo()->resultsPerPage;
                 echo 'Loading ' . $maxCount . ' results from ' . $totalResults . ' in batches of '
@@ -99,19 +100,27 @@ class YTMachine
     /* @var $youtube Google_Service_YouTube */
     private $youtube;
 
-    /**
-     * @return Google_Service_YouTube
-     */
     function getYoutube()
     {
-        // authenticate
-        if ($this->googleClient->getAuth()->isAccessTokenExpired())
-            $this->googleClient->getAuth()->refreshTokenWithAssertion();
+        $this->ensureOAuthenticated();
         // create on demand
         if ($this->youtube == null)
             $this->youtube = new Google_Service_YouTube($this->googleClient);
         return $this->youtube;
     }
+
+    // @var $youtubeAnalytics Google_Service_YouTubeAnalytics
+    /*private $youtubeAnalytics;
+
+    function getYoutubeAnalytics()
+    {
+        $this->ensureOAuthenticated();
+        // create on demand
+        if ($this->youtubeAnalytics == null)
+            $this->youtubeAnalytics = new Google_Service_YouTubeAnalytics($this->googleClient);
+        return $this->youtubeAnalytics;
+    }*/
+
 
     /* @var $guzzle \GuzzleHttp\Client() */
     private $guzzle;
@@ -126,6 +135,12 @@ class YTMachine
             $this->guzzle = new \GuzzleHttp\Client();
         return $this->guzzle;
     }
+
+    private function ensureOAuthenticated()
+    {
+        if ($this->googleClient->getAuth()->isAccessTokenExpired())
+            $this->googleClient->getAuth()->refreshTokenWithAssertion();
+    }
 }
 
 
@@ -134,7 +149,7 @@ class YTVideo
     // how large should a SRT be to be considered OK
     const SUB_OK_THRESHOLD = 500;
 
-    // all string properties
+    // first discovered properties
     public $videoId;
     public $title;
     public $description;
@@ -142,11 +157,23 @@ class YTVideo
     public $thumbUrl;
     public $language;
 
+    // after resolveCaptions()
     public $ytCC = null;
+
+    // after resolveDetails()
+    public $countViews;
+    public $countComments;
+    public $countLikes;
+    public $countDislikes;
+    public $countFavorites;
+    public $channelId;
+    public $channelTitle;
+    public $tags;
 
     /* @var $ytMachine YTMachine */
     private $ytMachine;
-    private $captionsResolved = false;
+    private $resolvedCaptions = false;
+    private $resolvedDetails = false;
 
     function __construct($videoId, $title, $description, $publishedAt, $thumbUrl, $language, $ytMachine)
     {
@@ -159,12 +186,45 @@ class YTVideo
         $this->ytMachine = $ytMachine;
     }
 
+    public function resolveDetails()
+    {
+        // do it at most once
+        if ($this->resolvedDetails)
+            return;
+        $this->resolvedDetails = true;
+
+        /* @var $item Google_Service_YouTube_Video
+         * @var $snip Google_Service_YouTube_VideoSnippet
+         * @var $stat Google_Service_YouTube_VideoStatistics
+         */
+        // NOTE: could add topicDetails in the future
+        $details = $this->ytMachine->getYoutube()->videos->listVideos('statistics,snippet', ['id' => $this->videoId]);
+        $items = $details->getItems();
+        if (YT_VIOLENT && sizeof($items) != 1)
+            die('Expecting 1 item, got ' . sizeof($items));
+        $item = $items[0];
+
+        // counters
+        $stat = $item->getStatistics();
+        $this->countViews = $stat->getViewCount();
+        $this->countComments = $stat->getCommentCount();
+        $this->countLikes = $stat->getLikeCount();
+        $this->countDislikes = $stat->getDislikeCount();
+        $this->countFavorites = $stat->getFavoriteCount();
+
+        // additional info (tags, channel)
+        $snip = $item->getSnippet();
+        $this->channelId = $snip->getChannelId();
+        $this->channelTitle = $snip->getChannelTitle();
+        $this->tags= $snip->getTags();
+    }
+
     public function resolveCaptions()
     {
         // do it at most once
-        if ($this->captionsResolved)
+        if ($this->resolvedCaptions)
             return;
-        $this->captionsResolved = true;
+        $this->resolvedCaptions = true;
 
         // perform the resolution
         $captionsList = $this->ytMachine->getYoutube()->captions->listCaptions('snippet', $this->videoId);
@@ -179,7 +239,7 @@ class YTVideo
             // Sanity: abort if the returned CC is for a different video
             $ccVideoId = $cc->getVideoId();
             if ($ccVideoId != $this->videoId) {
-                if (YT_DEBUG)
+                if (YT_VIOLENT)
                     die('wrong video id, got ' . $ccVideoId . ' expecting ' . $this->videoId);
                 continue;
             }
@@ -187,7 +247,7 @@ class YTVideo
             // Sanity: check constant attributes, or stop if unexpected
             $ccStatus = $cc->getStatus();
             if ($ccStatus != 'serving')
-                if (YT_DEBUG)
+                if (YT_VIOLENT)
                     die('wrong status. expected serving, got ' . $ccStatus);
 
             // Base fetching URL: alternative base: 'http://video.google.com/timedtext?v='
@@ -199,7 +259,7 @@ class YTVideo
                 // FILTER: skip if the language is not what we asked for
                 if ($ccLang != $this->language) {
                     // NOTE: in the future we could also stash other languages for later
-                    if (YT_DEBUG)
+                    if (YT_VERBOSE)
                         echo $ccVideoId . ',  skipping CC for different language: ' . $ccLang . "\n";
                     continue;
                 }
@@ -217,11 +277,11 @@ class YTVideo
                 // nothing to do here
             } else if ($ccKind == 'ASR') {
                 // FILTER: TODO: we don't support the ASR format yet, at all. Always fails.
-                if (YT_DEBUG)
+                if (YT_VERBOSE)
                     echo $ccVideoId . ',  skipping ASR tracks (unsupported yet)' . "\n";
                 continue;
             } else {
-                if (YT_DEBUG)
+                if (YT_VIOLENT)
                     die('unknown track type ' . $ccKind);
                 continue;
             }
@@ -240,12 +300,12 @@ class YTVideo
             try {
                 $msg = $this->ytMachine->getGuzzle()->get($fetchUrl);
                 if ($msg->getStatusCode() != 200) {
-                    if (YT_DEBUG)
+                    if (YT_VIOLENT)
                         die('wrong status code ' . $msg->getStatusCode() . ' on ' . $fetchUrl);
                     continue;
                 }
             } catch (\GuzzleHttp\Exception\ClientException $exception) {
-                if (YT_DEBUG)
+                if (YT_VIOLENT)
                     die('HTTP request failed: ' . $exception);
                 continue;
             }
@@ -255,7 +315,7 @@ class YTVideo
             $ccXml = $ccBody->getContents();
             $ccXmlSize = $ccBody->getSize();
             if ($ccXmlSize < self::SUB_OK_THRESHOLD) {
-                if (YT_DEBUG)
+                if (YT_VERBOSE)
                     echo $ccVideoId . ',  skipping for small size: ' . $ccXmlSize . "\n";
                 continue;
             }
@@ -296,7 +356,8 @@ class YTCC
         $this->xmlData = $xmlData;
         $this->trackName = $trackName;
         $this->lastUpdated = $lastUpdated;
-        if (YT_DEBUG)
+
+        if (YT_VERBOSE)
             echo $videoId . ',' . $xmlSize . ',' . $trackName . ',' . $lastUpdated . ',' . $id . "\n";
     }
 }

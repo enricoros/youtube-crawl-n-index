@@ -25,15 +25,17 @@ $criteria = new YTSearchCriteria('Donald Trump');
 
 $videos = $yt->searchVideos($criteria, 5000);
 
-$yep = 0;
+$goodVideos = [];
 foreach ($videos as $video) {
 
     $video->resolveCaptions();
     if ($video->ytCC != null) {
-        echo 'cc: I love the smell of fresh captions in the morning' . "\n";
-        $yep++;
-    }
+        echo '.';
+        $video->resolveDetails();
+        array_push($goodVideos, $video);
+    } else
+        echo 'x';
 
 }
 
-echo 'ok: ' . $yep . ' over: ' . sizeof($videos) . "\n";
+echo 'ok: ' . sizeof($goodVideos) . ' over: ' . sizeof($videos) . "\n";
