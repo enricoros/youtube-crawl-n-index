@@ -1,5 +1,5 @@
-<!--
-Copyright 2015, Enrico Ros
+<?php
+/* Copyright 2015, Enrico Ros
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -11,12 +11,11 @@ Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
-limitations under the License.
--->
-<?php
+limitations under the License. */
 
 define('YT_DEBUG', false);
 define('YT_LANG_FILTER', 'en');
+
 
 class YTMachine
 {
@@ -26,39 +25,18 @@ class YTMachine
 
     // list of permissions we need
     private $scopes = ['https://www.googleapis.com/auth/youtube.force-ssl'];
-    // how large should a SRT be to be considered OK
-    const SUB_OK_THRESHOLD = 500;
 
-    private $client;
-    /* @var $youtube Google_Service_YouTube */
-    private $youtube;
-    /* @var $guz \GuzzleHttp\Client */
-    private $guzzle;
+    private $googleClient;
 
     function __construct()
     {
+        $this->googleClient = new Google_Client();
         $credentials = new Google_Auth_AssertionCredentials(
             trim(file_get_contents($this->oauth_email_file)),
             $this->scopes,
             file_get_contents($this->oauth_P12_file)
         );
-
-        $this->client = new Google_Client();
-        $this->client->setAssertionCredentials($credentials);
-    }
-
-    /**
-     * @return Google_Service_YouTube
-     */
-    function init()
-    {
-        if ($this->youtube == null) {
-            $this->ensureOAuthenticated();
-            $this->youtube = new Google_Service_YouTube($this->client);
-        }
-        if ($this->guzzle == null)
-            $this->guzzle = new \GuzzleHttp\Client();
-        return $this->youtube;
+        $this->googleClient->setAssertionCredentials($credentials);
     }
 
     /**
@@ -69,7 +47,6 @@ class YTMachine
      */
     function searchVideos($criteria, $maxCount)
     {
-        /* @var $allVideos YTVideo[] */
         $allVideos = [];
         $nextPageToken = null;
         do {
@@ -78,8 +55,7 @@ class YTMachine
             // try to go with the right size (will be paginated automatically)
             $criteria->setResultsPageSize($maxCount - sizeof($allVideos));
 
-            $this->ensureOAuthenticated();
-            $listResults = $this->youtube->search->listSearch('id,snippet', $criteria->getArray());
+            $listResults = $this->getYoutube()->search->listSearch('id,snippet', $criteria->getArray());
 
             if (YT_DEBUG && $nextPageToken == null) {
                 $totalResults = $listResults->getPageInfo()->totalResults;
@@ -109,7 +85,7 @@ class YTMachine
                 $video = new YTVideo(
                     $id->getVideoId(), $snippet->getTitle(), $snippet->getDescription(),
                     $snippet->getPublishedAt(), ($thumb != null) ? $thumb->getUrl() : '',
-                    $criteria->getLanguage()
+                    $criteria->getLanguage(), $this
                 );
                 array_push($allVideos, $video);
             }
@@ -120,33 +96,91 @@ class YTMachine
         return $allVideos;
     }
 
+    /* @var $youtube Google_Service_YouTube */
+    private $youtube;
 
     /**
-     * @param $video YTVideo
+     * @return Google_Service_YouTube
      */
-    public function resolveCaptionsForVideo($video)
+    function getYoutube()
     {
-        if ($video->captionsResolved)
+        // authenticate
+        if ($this->googleClient->getAuth()->isAccessTokenExpired())
+            $this->googleClient->getAuth()->refreshTokenWithAssertion();
+        // create on demand
+        if ($this->youtube == null)
+            $this->youtube = new Google_Service_YouTube($this->googleClient);
+        return $this->youtube;
+    }
+
+    /* @var $guzzle \GuzzleHttp\Client() */
+    private $guzzle;
+
+    /**
+     * @return \GuzzleHttp\Client
+     */
+    function getGuzzle()
+    {
+        // create on demand
+        if ($this->guzzle == null)
+            $this->guzzle = new \GuzzleHttp\Client();
+        return $this->guzzle;
+    }
+}
+
+
+class YTVideo
+{
+    // how large should a SRT be to be considered OK
+    const SUB_OK_THRESHOLD = 500;
+
+    // all string properties
+    public $videoId;
+    public $title;
+    public $description;
+    public $publishedAt;
+    public $thumbUrl;
+    public $language;
+
+    public $ytCC = null;
+
+    /* @var $ytMachine YTMachine */
+    private $ytMachine;
+    private $captionsResolved = false;
+
+    function __construct($videoId, $title, $description, $publishedAt, $thumbUrl, $language, $ytMachine)
+    {
+        $this->videoId = $videoId;
+        $this->title = $title;
+        $this->description = $description;
+        $this->publishedAt = $publishedAt;
+        $this->thumbUrl = $thumbUrl;
+        $this->language = $language;
+        $this->ytMachine = $ytMachine;
+    }
+
+    public function resolveCaptions()
+    {
+        // do it at most once
+        if ($this->captionsResolved)
             return;
+        $this->captionsResolved = true;
 
         // perform the resolution
-        $this->ensureOAuthenticated();
-        $captionsList = $this->youtube->captions->listCaptions('snippet', $video->videoId);
+        $captionsList = $this->ytMachine->getYoutube()->captions->listCaptions('snippet', $this->videoId);
 
         // get all the SRT from this track that match the language
-        $video->captionsResolved = true;
-        $video->caption = [];
+        $ytCCs = [];
         foreach ($captionsList->getItems() as $item) {
-            // ignored: ETag and Kind(const)
-            $ccId = $item->getId();
-            $cc = $item->getSnippet();
             /* @var $cc Google_Service_YouTube_CaptionSnippet */
-            $ccVideoId = $cc->getVideoId();
+            $cc = $item->getSnippet();
+            $ccId = $item->getId();
 
             // Sanity: abort if the returned CC is for a different video
-            if ($ccVideoId != $video->videoId) {
+            $ccVideoId = $cc->getVideoId();
+            if ($ccVideoId != $this->videoId) {
                 if (YT_DEBUG)
-                    die('wrong video id, got ' . $ccVideoId . ' expecting ' . $video->videoId);
+                    die('wrong video id, got ' . $ccVideoId . ' expecting ' . $this->videoId);
                 continue;
             }
 
@@ -163,11 +197,11 @@ class YTMachine
             $ccLang = $cc->getLanguage();
             if (!empty($ccLang)) {
                 // FILTER: skip if the language is not what we asked for
-                if ($ccLang != $video->language) {
+                if ($ccLang != $this->language) {
                     // NOTE: in the future we could also stash other languages for later
                     if (YT_DEBUG)
                         echo $ccVideoId . ',  skipping CC for different language: ' . $ccLang . "\n";
-                    //continue;
+                    continue;
                 }
                 $fetchUrl .= '&lang=' . $ccLang;
             }
@@ -204,7 +238,7 @@ class YTMachine
 
             // Fetch the Caption (and expect a 200:OK code)
             try {
-                $msg = $this->guzzle->get($fetchUrl);
+                $msg = $this->ytMachine->getGuzzle()->get($fetchUrl);
                 if ($msg->getStatusCode() != 200) {
                     if (YT_DEBUG)
                         die('wrong status code ' . $msg->getStatusCode() . ' on ' . $fetchUrl);
@@ -229,55 +263,19 @@ class YTMachine
             // FILTER: parse and validate XML?
             // TODO
 
-            // save the fully-fetched caption for this video
-            $ytCC = new YTCC($ccId, $ccVideoId, $ccXmlSize, $ccXml, $ccName, $cc->getLastUpdated());
-            array_push($video->caption, $ytCC);
-        }
-
-        // reset the caption if none found
-        if (empty($video->caption)) {
-            $video->caption = null;
-            return;
+            // save the fully-fetched caption
+            array_push($ytCCs,
+                new YTCC($ccId, $ccVideoId, $ccXmlSize, $ccXml, $ccName, $cc->getLastUpdated())
+            );
         }
 
         // use just best caption amongst those available, chosen by size
-        usort($video->caption, function ($a, $b) {
+        usort($ytCCs, function ($a, $b) {
             return $b->xmlSize - $a->xmlSize;
         });
-        $video->caption = $video->caption[0];
-    }
 
-
-    // call this before calling other API operations, to make sure we can still go ahead and perform them
-    private function ensureOAuthenticated()
-    {
-        if ($this->client->getAuth()->isAccessTokenExpired())
-            $this->client->getAuth()->refreshTokenWithAssertion();
-    }
-}
-
-
-class YTVideo
-{
-    // all string properties
-    public $videoId;
-    public $title;
-    public $description;
-    public $publishedAt;
-    public $thumbUrl;
-    public $language;
-
-    public $caption = null;
-    public $captionsResolved = false;
-
-    function __construct($videoId, $title, $description, $publishedAt, $thumbUrl, $language)
-    {
-        $this->videoId = $videoId;
-        $this->title = $title;
-        $this->description = $description;
-        $this->publishedAt = $publishedAt;
-        $this->thumbUrl = $thumbUrl;
-        $this->language = $language;
+        // pick the best (if any), or null
+        $this->ytCC = empty($ytCCs) ? null : $ytCCs[0];
     }
 }
 
