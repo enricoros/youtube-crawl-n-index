@@ -1,0 +1,16 @@
+{
+    "name": "eros/htdocs_fbomb",
+    "description": "That's what he said!",
+    "license": "Apache-2.0",
+    "require": {
+        "google/apiclient": "^1.1",
+        "guzzlehttp/guzzle": "~6.0",
+        "elasticsearch/elasticsearch": "~2.0@beta"
+    },
+    "authors": [
+        {
+            "name": "Enrico Ros",
+            "email": "enrico.ros@gmail.com"
+        }
+    ]
+}
