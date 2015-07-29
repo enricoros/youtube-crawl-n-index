@@ -97,6 +97,25 @@ class YTMachine
         return $allVideos;
     }
 
+    /**
+     * Merges the second array into the first, excluding any duplicate video (by unique videoIds)
+     * @param $into YTVideo[] the destination array, where items are appended
+     * @param $from YTVideo[] to insert form
+     */
+    public function mergeUniqueVideos(&$into, &$from)
+    {
+        $existingIds = array_map(function($video) {
+            return $video->videoId;
+        }, $into);
+        foreach ($from as $video) {
+            if (!in_array($video->videoId, $existingIds)) {
+                array_push($into, $video);
+                array_push($existingIds, $video->videoId);
+            }
+        }
+    }
+
+
     /* @var $youtube Google_Service_YouTube */
     private $youtube;
 
@@ -220,7 +239,7 @@ class YTVideo
         $snip = $item->getSnippet();
         $this->channelId = $snip->getChannelId();
         $this->channelTitle = $snip->getChannelTitle();
-        $this->tags= $snip->getTags();
+        $this->tags = $snip->getTags();
     }
 
     public function resolveCaptions()

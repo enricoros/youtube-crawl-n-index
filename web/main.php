@@ -21,13 +21,26 @@ session_start();
 // create the YouTube Machine
 $yt = new \YTMachine();
 
-// create a simple search for 50 captioned and embeddable videos
-$criteria = new YTSearchCriteria('Donald Trump');
-$videos = $yt->searchVideos($criteria, 50);
+/* @var $videoLeads YTVideo[] */
+$videoLeads = [];
+
+// NEED a Twitter pump here... we need serious memes
+$someQueries = [
+    'Steve Jobs', 'Obama', 'Elon Musk',
+    'Donald Trump', 'PewDiePie', 'fails 2016',
+    'cursing', 'loses control'
+];
+foreach ($someQueries as $query) {
+
+    $criteria = new YTSearchCriteria($query);
+    $videos = $yt->searchVideos($criteria, 50);
+    $yt->mergeUniqueVideos($videoLeads, $videos);
+
+}
 
 // fetch all the captions (and also more details for videos with captions.. and drop the rest)
 $goodVideos = [];
-foreach ($videos as $video) {
+foreach ($videoLeads as $video) {
 
     $video->resolveCaptions();
     if ($video->ytCC != null) {
@@ -39,9 +52,9 @@ foreach ($videos as $video) {
 
 }
 // sort videos by views...
-usort($goodVideos, function ($a, $b) {
+/*usort($goodVideos, function ($a, $b) {
     return $b->countViews - $a->countViews;
-});
+});*/
 
 // ...or sort videos by dislikes! (trolling the trolls here :)
 usort($goodVideos, function ($a, $b) {
