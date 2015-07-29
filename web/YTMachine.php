@@ -1,6 +1,7 @@
 <?php
 
 define('YT_DEBUG', true);
+define('YT_LANG_FILTER', 'en');
 
 class YTMachine
 {
@@ -10,10 +11,14 @@ class YTMachine
 
     // list of permissions we need
     private $scopes = ['https://www.googleapis.com/auth/youtube.force-ssl'];
+    // how large should a SRT be to be considered OK
+    const SUB_OK_THRESHOLD = 500;
 
     private $client;
     /* @var $youtube Google_Service_YouTube */
     private $youtube;
+    /* @var $guz \GuzzleHttp\Client */
+    private $guzzle;
 
     function __construct()
     {
@@ -36,6 +41,8 @@ class YTMachine
             $this->ensureOAuthenticated();
             $this->youtube = new Google_Service_YouTube($this->client);
         }
+        if ($this->guzzle == null)
+            $this->guzzle = new \GuzzleHttp\Client();
         return $this->youtube;
     }
 
@@ -63,7 +70,7 @@ class YTMachine
                 $totalResults = $listResults->getPageInfo()->totalResults;
                 $perPageResults = $listResults->getPageInfo()->resultsPerPage;
                 echo 'Loading ' . $maxCount . ' results from ' . $totalResults . ' in batches of '
-                    . $perPageResults . ' for query ' . $criteria->getQuery() . '\\n';
+                    . $perPageResults . ' for query ' . $criteria->getQuery() . "\n";
             }
 
             // parse the list of results for per-video information
@@ -86,7 +93,8 @@ class YTMachine
                 // create an entry with all the info we have so far
                 $video = new YTVideo(
                     $id->getVideoId(), $snippet->getTitle(), $snippet->getDescription(),
-                    $snippet->getPublishedAt(), ($thumb != null) ? $thumb->getUrl() : ''
+                    $snippet->getPublishedAt(), ($thumb != null) ? $thumb->getUrl() : '',
+                    $criteria->getLanguage()
                 );
                 array_push($allVideos, $video);
             }
@@ -103,17 +111,98 @@ class YTMachine
      */
     public function resolveCaptions($video)
     {
+        // perform the resolution
         $this->ensureOAuthenticated();
         $captions = $this->youtube->captions->listCaptions('snippet', $video->videoId);
-        $items = $captions->getItems();
-        foreach ($items as $item) {
-            // ETag ignored and Kind (const) ignored
-            $captionId = $item->getId();
-            /* @var $captionSnippet Google_Service_YouTube_CaptionSnippet */
-            $captionSnippet = $item->getSnippet();
-            $captionSnippet->get
 
+        // get all the SRT from this track that match the language
+        foreach ($captions->getItems() as $item) {
+            // ignored: ETag and Kind(const)
+            $ccId = $item->getId();
+            $cc = $item->getSnippet();
+            /* @var $cc Google_Service_YouTube_CaptionSnippet */
+            $ccVideoId = $cc->getVideoId();
 
+            // Sanity: abort if the returned CC is for a different video
+            if ($ccVideoId != $video->videoId) {
+                if (YT_DEBUG)
+                    die('wrong video id, got ' . $ccVideoId . ' expecting ' . $video->videoId);
+                continue;
+            }
+
+            // Base fetching URL: alternative base: 'http://video.google.com/timedtext?v='
+            $fetchUrl = 'https://www.youtube.com/api/timedtext?v=' . $ccVideoId;
+
+            // add language
+            $ccLang = $cc->getLanguage();
+            if (!empty($ccLang)) {
+                // FILTER: skip if the language is not what we asked for
+                if ($ccLang != $video->language) {
+                    // NOTE: in the future we could also stash other languages for later
+                    if (YT_DEBUG)
+                        echo $ccVideoId . ',  skipping CC for different language: ' . $ccLang . "\n";
+                    continue;
+                }
+                $fetchUrl .= '&lang=' . $ccLang;
+            }
+
+            // add 'name'
+            $ccName = $cc->getName();
+            if (!empty($ccName))
+                $fetchUrl .= '&name=' . $ccName;
+
+            // add kind
+            $ccKind = $cc->getTrackKind();
+            if ($ccKind == 'standard') {
+                // nothing to do here
+            } else if ($ccKind == 'ASR') {
+                // FILTER: TODO: we don't support the ASR format yet, at all. Always fails.
+                if (YT_DEBUG)
+                    echo $ccVideoId . ',  skipping ASR tracks (unsupported yet)' . "\n";
+                continue;
+            } else {
+                if (YT_DEBUG)
+                    die('unknown track type ' . $ccKind);
+                continue;
+            }
+
+            // customize the format. available formats:
+            // srv1: <text start="2.501" dur="3.671">
+            // srv2: <timedtext><window t="0" id="1" op="define" rc="15" cc="32" ap="7" ah="50" av="95"/><text w="2" t="5538" d="2536">RE</text>
+            // srv3: <timedtext format="3"><p t="2501" d="3671" w="2"><s>TH</s><s t="33">E</s>
+            // sbv:  [SubViewer] 0:00:02.501,0:00:06.172 \n THE WASHINGTON CORRESPONDENT
+            // srt:  [SubRip   ] 1 \n 00:00:02,501 --> 00:00:06,172 \n THE WASHINGTON CORRESPONDENT
+            // ttml: [TTML     ] <p begin="00:00:02.501" end="00:00:06.172" region="r3" style="s2"><span begin="00:00:00.000">TH</span>
+            // vtt:  [WebVTT   ] 00:00:02.501 --> 00:00:06.172 align:start position:0% line:7% \n THE WASHINGTON CORRESPONDENT
+            $fetchUrl .= '&fmt=srv1';
+
+            // Fetch the Caption (and expect a 200:OK code)
+            try {
+                $msg = $this->guzzle->get($fetchUrl);
+                if ($msg->getStatusCode() != 200) {
+                    if (YT_DEBUG)
+                        die('wrong status code ' . $msg->getStatusCode() . ' on ' . $fetchUrl);
+                    continue;
+                }
+            } catch (\GuzzleHttp\Exception\ClientException $exception) {
+                if (YT_DEBUG)
+                    die('HTTP request failed: ' . $exception);
+                continue;
+            }
+
+            // FILTER: Size Heuristic (FIXME): reject semi-empty captions (usually with not much more than the title)
+            $cBody = $msg->getBody();
+            $ccBodySize = $cBody->getSize();
+            if ($ccBodySize < self::SUB_OK_THRESHOLD) {
+                if (YT_DEBUG)
+                    echo $ccVideoId . ',  skipping for small size: ' . $ccBodySize . "\n";
+                continue;
+            }
+
+            // CSV export
+            echo $ccVideoId . ',  ' . $ccLang . ',' . $cc->getLastUpdated() . ','
+                . $ccName . ',' . $cc->getStatus() . ',' . $cc->getTrackKind() . ','
+                . ', ' . $ccBodySize . ' , ' . $ccId .  "\n";
         }
     }
 
@@ -133,16 +222,18 @@ class YTVideo
     public $description;
     public $publishedAt;
     public $thumbUrl;
+    public $language;
 
     public $hasCaption;
 
-    function __construct($videoId, $title, $description, $publishedAt, $thumbUrl)
+    function __construct($videoId, $title, $description, $publishedAt, $thumbUrl, $language)
     {
         $this->videoId = $videoId;
         $this->title = $title;
         $this->description = $description;
         $this->publishedAt = $publishedAt;
         $this->thumbUrl = $thumbUrl;
+        $this->language = $language;
         $this->hasCaption = true;
     }
 }
@@ -159,7 +250,7 @@ class YTSearchCriteria
         $this->criteria['videoCaption'] = 'closedCaption';
         $this->criteria['safeSearch'] = 'none';
         $this->criteria['videoEmbeddable'] = 'true';
-        $this->setLanguage('en');
+        $this->setLanguage(YT_LANG_FILTER);
         $this->setResultsPageSize(40);
         $this->setHD(true);
     }
@@ -243,8 +334,12 @@ class YTSearchCriteria
         return $this->criteria;
     }
 
-    public function getQuery()
+    function getQuery()
     {
         return $this->criteria['q'];
+    }
+
+    function getLanguage() {
+        return $this->criteria['relevanceLanguage'];
     }
 }
