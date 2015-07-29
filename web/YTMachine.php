@@ -156,6 +156,7 @@ class YTVideo
     public $publishedAt;
     public $thumbUrl;
     public $language;
+    public $desktopUrl;
 
     // after resolveCaptions()
     public $ytCC = null;
@@ -165,6 +166,7 @@ class YTVideo
     public $countComments;
     public $countLikes;
     public $countDislikes;
+    public $countDislikesPct;
     public $countFavorites;
     public $channelId;
     public $channelTitle;
@@ -183,6 +185,7 @@ class YTVideo
         $this->publishedAt = $publishedAt;
         $this->thumbUrl = $thumbUrl;
         $this->language = $language;
+        $this->desktopUrl = 'https://www.youtube.com/watch?v=' . $videoId;
         $this->ytMachine = $ytMachine;
     }
 
@@ -211,6 +214,7 @@ class YTVideo
         $this->countLikes = $stat->getLikeCount();
         $this->countDislikes = $stat->getDislikeCount();
         $this->countFavorites = $stat->getFavoriteCount();
+        $this->countDislikesPct = $this->countViews > 0 ? (100 * $this->countDislikes / $this->countViews) : 0;
 
         // additional info (tags, channel)
         $snip = $item->getSnippet();

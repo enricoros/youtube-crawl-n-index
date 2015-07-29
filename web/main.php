@@ -18,24 +18,34 @@ require_once 'YTMachine.php';
 
 session_start();
 
-// create the YouTube Machine and Authenticate via Google OAuth2 Serices
+// create the YouTube Machine
 $yt = new \YTMachine();
 
+// create a simple search for 50 captioned and embeddable videos
 $criteria = new YTSearchCriteria('Donald Trump');
+$videos = $yt->searchVideos($criteria, 50);
 
-$videos = $yt->searchVideos($criteria, 5000);
-
+// fetch all the captions (and also more details for videos with captions.. and drop the rest)
 $goodVideos = [];
 foreach ($videos as $video) {
 
     $video->resolveCaptions();
     if ($video->ytCC != null) {
-        echo '.';
         $video->resolveDetails();
         array_push($goodVideos, $video);
+        echo '.';
     } else
         echo 'x';
 
 }
+// sort videos by views...
+usort($goodVideos, function ($a, $b) {
+    return $b->countViews - $a->countViews;
+});
+
+// ...or sort videos by dislikes! (trolling the trolls here :)
+usort($goodVideos, function ($a, $b) {
+    return $b->countDislikesPct - $a->countDislikesPct;
+});
 
 echo 'ok: ' . sizeof($goodVideos) . ' over: ' . sizeof($videos) . "\n";
