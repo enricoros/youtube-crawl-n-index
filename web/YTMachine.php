@@ -1,6 +1,21 @@
+<!--
+Copyright 2015, Enrico Ros
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
 <?php
 
-define('YT_DEBUG', true);
+define('YT_DEBUG', false);
 define('YT_LANG_FILTER', 'en');
 
 class YTMachine
@@ -109,14 +124,19 @@ class YTMachine
     /**
      * @param $video YTVideo
      */
-    public function resolveCaptions($video)
+    public function resolveCaptionsForVideo($video)
     {
+        if ($video->captionsResolved)
+            return;
+
         // perform the resolution
         $this->ensureOAuthenticated();
-        $captions = $this->youtube->captions->listCaptions('snippet', $video->videoId);
+        $captionsList = $this->youtube->captions->listCaptions('snippet', $video->videoId);
 
         // get all the SRT from this track that match the language
-        foreach ($captions->getItems() as $item) {
+        $video->captionsResolved = true;
+        $video->caption = [];
+        foreach ($captionsList->getItems() as $item) {
             // ignored: ETag and Kind(const)
             $ccId = $item->getId();
             $cc = $item->getSnippet();
@@ -130,6 +150,12 @@ class YTMachine
                 continue;
             }
 
+            // Sanity: check constant attributes, or stop if unexpected
+            $ccStatus = $cc->getStatus();
+            if ($ccStatus != 'serving')
+                if (YT_DEBUG)
+                    die('wrong status. expected serving, got ' . $ccStatus);
+
             // Base fetching URL: alternative base: 'http://video.google.com/timedtext?v='
             $fetchUrl = 'https://www.youtube.com/api/timedtext?v=' . $ccVideoId;
 
@@ -141,7 +167,7 @@ class YTMachine
                     // NOTE: in the future we could also stash other languages for later
                     if (YT_DEBUG)
                         echo $ccVideoId . ',  skipping CC for different language: ' . $ccLang . "\n";
-                    continue;
+                    //continue;
                 }
                 $fetchUrl .= '&lang=' . $ccLang;
             }
@@ -166,7 +192,7 @@ class YTMachine
                 continue;
             }
 
-            // customize the format. available formats:
+            // customize the output format. available formats:
             // srv1: <text start="2.501" dur="3.671">
             // srv2: <timedtext><window t="0" id="1" op="define" rc="15" cc="32" ap="7" ah="50" av="95"/><text w="2" t="5538" d="2536">RE</text>
             // srv3: <timedtext format="3"><p t="2501" d="3671" w="2"><s>TH</s><s t="33">E</s>
@@ -191,21 +217,38 @@ class YTMachine
             }
 
             // FILTER: Size Heuristic (FIXME): reject semi-empty captions (usually with not much more than the title)
-            $cBody = $msg->getBody();
-            $ccBodySize = $cBody->getSize();
-            if ($ccBodySize < self::SUB_OK_THRESHOLD) {
+            $ccBody = $msg->getBody();
+            $ccXml = $ccBody->getContents();
+            $ccXmlSize = $ccBody->getSize();
+            if ($ccXmlSize < self::SUB_OK_THRESHOLD) {
                 if (YT_DEBUG)
-                    echo $ccVideoId . ',  skipping for small size: ' . $ccBodySize . "\n";
+                    echo $ccVideoId . ',  skipping for small size: ' . $ccXmlSize . "\n";
                 continue;
             }
 
-            // CSV export
-            echo $ccVideoId . ',  ' . $ccLang . ',' . $cc->getLastUpdated() . ','
-                . $ccName . ',' . $cc->getStatus() . ',' . $cc->getTrackKind() . ','
-                . ', ' . $ccBodySize . ' , ' . $ccId .  "\n";
+            // FILTER: parse and validate XML?
+            // TODO
+
+            // save the fully-fetched caption for this video
+            $ytCC = new YTCC($ccId, $ccVideoId, $ccXmlSize, $ccXml, $ccName, $cc->getLastUpdated());
+            array_push($video->caption, $ytCC);
         }
+
+        // reset the caption if none found
+        if (empty($video->caption)) {
+            $video->caption = null;
+            return;
+        }
+
+        // use just best caption amongst those available, chosen by size
+        usort($video->caption, function ($a, $b) {
+            return $b->xmlSize - $a->xmlSize;
+        });
+        $video->caption = $video->caption[0];
     }
 
+
+    // call this before calling other API operations, to make sure we can still go ahead and perform them
     private function ensureOAuthenticated()
     {
         if ($this->client->getAuth()->isAccessTokenExpired())
@@ -224,7 +267,8 @@ class YTVideo
     public $thumbUrl;
     public $language;
 
-    public $hasCaption;
+    public $caption = null;
+    public $captionsResolved = false;
 
     function __construct($videoId, $title, $description, $publishedAt, $thumbUrl, $language)
     {
@@ -234,10 +278,30 @@ class YTVideo
         $this->publishedAt = $publishedAt;
         $this->thumbUrl = $thumbUrl;
         $this->language = $language;
-        $this->hasCaption = true;
     }
 }
 
+class YTCC
+{
+    private $id;
+    private $videoId;
+    public $xmlSize;
+    public $xmlData;
+    private $trackName;
+    private $lastUpdated;
+
+    function __construct($id, $videoId, $xmlSize, $xmlData, $trackName, $lastUpdated)
+    {
+        $this->id = $id;
+        $this->videoId = $videoId;
+        $this->xmlSize = $xmlSize;
+        $this->xmlData = $xmlData;
+        $this->trackName = $trackName;
+        $this->lastUpdated = $lastUpdated;
+        if (YT_DEBUG)
+            echo $videoId . ',' . $xmlSize . ',' . $trackName . ',' . $lastUpdated . ',' . $id . "\n";
+    }
+}
 
 class YTSearchCriteria
 {
@@ -339,7 +403,8 @@ class YTSearchCriteria
         return $this->criteria['q'];
     }
 
-    function getLanguage() {
+    function getLanguage()
+    {
         return $this->criteria['relevanceLanguage'];
     }
 }
