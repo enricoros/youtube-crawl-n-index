@@ -382,7 +382,7 @@ class YTVideo
             if (YT_VIOLENT && $ccXml->getName() != 'transcript')
                 die('expected a transcript, got a ' . $ccXml->getName() . ' instead ');
             foreach ($ccXml->text AS $text) {
-                $line = strval($text);
+                //$line = strval($text);
                 $attributes = $text->attributes();
                 $start = $attributes['start'];
                 $duration = $attributes['dur'];

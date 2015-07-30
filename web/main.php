@@ -14,7 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 require_once __DIR__ . '/../vendor/autoload.php';
-require_once 'Cacher.php';
+require_once 'CacheMachine.php';
+require_once 'IndexMachine.php';
 require_once 'YTMachine.php';
 
 session_start();
@@ -33,6 +34,14 @@ session_start();
     <input type="text" id="captionText" name="captionText" placeholder="search inside...">
     <input type="submit" value="GO!">
 </form>
+<div>
+    Some Queries:
+    <ul>
+        <li>570 wifi base stations</li>
+        <li>...</li>
+    </ul>
+</div>
+
 
 <?php
 // create the YouTube Machine
@@ -61,6 +70,9 @@ foreach ($someQueries as $query) {
 
 }
 
+shuffle($videoLeads);
+echo 'processing ' . sizeof($videoLeads) . ' video leads' . "\n<br>";
+
 // fetch all the captions (and also more details for videos with captions.. and drop the rest)
 $goodVideos = [];
 foreach ($videoLeads as $video) {
@@ -82,14 +94,12 @@ if (isset($_GET['captionText']) && !empty($_GET['captionText'])) {
     });
 }
 
-//echo 'ok: ' . sizeof($goodVideos) . ' over: ' . sizeof($videoLeads) . "\n";
-?>
-test
-<?php
+echo 'ok: ' . sizeof($goodVideos) . ' over: ' . sizeof($videoLeads) . "\n<br>";
 foreach ($goodVideos as $video) {
     echo '<br><img src="' . $video->thumbUrl . '" width="40"  /><br><predator>' . /*strval(json_encode($video->ytCC->xml)) .*/'</predator>';
 }
+
 ?>
-test
+
 </body>
 </html>
