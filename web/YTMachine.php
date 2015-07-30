@@ -189,6 +189,7 @@ class YTVideo
     public $countFavorites;
     public $channelId;
     public $channelTitle;
+    public $durationS;
     public $tags;
 
     /* @var $ytMachine YTMachine */
@@ -218,9 +219,10 @@ class YTVideo
         /* @var $item Google_Service_YouTube_Video
          * @var $snip Google_Service_YouTube_VideoSnippet
          * @var $stat Google_Service_YouTube_VideoStatistics
+         * @var $cDet Google_Service_YouTube_VideoContentDetails
          */
         // NOTE: could add topicDetails in the future
-        $details = $this->ytMachine->getYoutube()->videos->listVideos('statistics,snippet', ['id' => $this->videoId]);
+        $details = $this->ytMachine->getYoutube()->videos->listVideos('statistics,snippet,contentDetails', ['id' => $this->videoId]);
         $items = $details->getItems();
         if (YT_VIOLENT && sizeof($items) != 1)
             die('Expecting 1 item, got ' . sizeof($items));
@@ -240,6 +242,11 @@ class YTVideo
         $this->channelId = $snip->getChannelId();
         $this->channelTitle = $snip->getChannelTitle();
         $this->tags = $snip->getTags();
+
+        // duration (ignoring: definition(hd), dimension(2d), caption(true), contentRating, countryRestriction, regionRestriction)
+        $cDet = $item->getContentDetails();
+        $dt = new DateInterval($cDet->getDuration());
+        $this->durationS = $dt->h * 3600 + $dt->i * 60 + $dt->s;
     }
 
     public function resolveCaptions()
@@ -335,20 +342,32 @@ class YTVideo
 
             // FILTER: Size Heuristic (FIXME): reject semi-empty captions (usually with not much more than the title)
             $ccBody = $msg->getBody();
-            $ccXml = $ccBody->getContents();
-            $ccXmlSize = $ccBody->getSize();
-            if ($ccXmlSize < self::SUB_OK_THRESHOLD) {
+            $ccString = $ccBody->getContents();
+            $ccStringSize = $ccBody->getSize();
+            if ($ccStringSize < self::SUB_OK_THRESHOLD) {
                 if (YT_VERBOSE)
-                    echo $ccVideoId . ',  skipping for small size: ' . $ccXmlSize . "\n";
+                    echo $ccVideoId . ',  skipping for small size: ' . $ccStringSize . "\n";
                 continue;
             }
 
             // FILTER: parse and validate XML?
-            // TODO
+            $ccXml = new SimpleXMLElement($ccString);
+            if (YT_VIOLENT && $ccXml->getName() != 'transcript')
+                die('expected a transcript, got a ' . $ccXml->getName() . ' instead ');
+            foreach ($ccXml->text AS $text) {
+                $line = strval($text);
+                $attributes = $text->attributes();
+                $start = $attributes['start'];
+                $duration = $attributes['dur'];
+
+                if (YT_VIOLENT && (empty($start) || empty($duration)))
+                    die('start or duration empty on ' . $ccVideoId);
+
+            }
 
             // save the fully-fetched caption
             array_push($ytCCs,
-                new YTCC($ccId, $ccVideoId, $ccXmlSize, $ccXml, $ccName, $cc->getLastUpdated())
+                new YTCC($ccId, $ccVideoId, $ccStringSize, $ccString, $ccXml, $ccName, $cc->getLastUpdated())
             );
         }
 
@@ -366,22 +385,24 @@ class YTCC
 {
     private $id;
     private $videoId;
-    public $xmlSize;
-    public $xmlData;
+    public $stringSize;
+    public $stringData;
+    public $xml;
     private $trackName;
     private $lastUpdated;
 
-    function __construct($id, $videoId, $xmlSize, $xmlData, $trackName, $lastUpdated)
+    function __construct($id, $videoId, $stringSize, $string, $xml, $trackName, $lastUpdated)
     {
         $this->id = $id;
         $this->videoId = $videoId;
-        $this->xmlSize = $xmlSize;
-        $this->xmlData = $xmlData;
+        $this->stringSize = $stringSize;
+        $this->stringData = $string;
+        $this->xml = $xml;
         $this->trackName = $trackName;
         $this->lastUpdated = $lastUpdated;
 
         if (YT_VERBOSE)
-            echo $videoId . ',' . $xmlSize . ',' . $trackName . ',' . $lastUpdated . ',' . $id . "\n";
+            echo $videoId . ',' . $stringSize . ',' . $trackName . ',' . $lastUpdated . ',' . $id . "\n";
     }
 }
 
