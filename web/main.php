@@ -32,8 +32,8 @@ $someQueries = [
 ];
 foreach ($someQueries as $query) {
 
-    $criteria = new YTSearchCriteria($query);
-    $videos = $yt->searchVideos($criteria, 50);
+    $criteria = new YTSearchCriteria(trim($query));
+    $videos = $yt->searchVideos($criteria, 10);
     $yt->mergeUniqueVideos($videoLeads, $videos);
 
 }
@@ -42,8 +42,7 @@ foreach ($someQueries as $query) {
 $goodVideos = [];
 foreach ($videoLeads as $video) {
 
-    $video->resolveCaptions();
-    if ($video->ytCC != null) {
+    if ($video->resolveCaptions()) {
         $video->resolveDetails();
         array_push($goodVideos, $video);
         echo '.';
@@ -51,14 +50,7 @@ foreach ($videoLeads as $video) {
         echo 'x';
 
 }
-// sort videos by views...
-/*usort($goodVideos, function ($a, $b) {
-    return $b->countViews - $a->countViews;
-});*/
 
-// ...or sort videos by dislikes! (trolling the trolls here :)
-usort($goodVideos, function ($a, $b) {
-    return $b->countDislikesPct - $a->countDislikesPct;
-});
+$yt->sortVideos($goodVideos, 'disliked');
 
 echo 'ok: ' . sizeof($goodVideos) . ' over: ' . sizeof($videos) . "\n";

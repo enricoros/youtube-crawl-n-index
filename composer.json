@@ -5,7 +5,9 @@
     "require": {
         "google/apiclient": "^1.1",
         "guzzlehttp/guzzle": "~6.0",
-        "elasticsearch/elasticsearch": "~2.0@beta"
+        "elasticsearch/elasticsearch": "~2.0@beta",
+        "abraham/twitteroauth": "0.5.3",
+        "predis/predis": "1.0.x-dev"
     },
     "authors": [
         {

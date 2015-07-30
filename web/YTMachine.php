@@ -17,7 +17,6 @@ define('YT_VIOLENT', true);
 define('YT_VERBOSE', false);
 define('YT_LANG_FILTER', 'en');
 
-
 class YTMachine
 {
     // cloud console data
@@ -27,17 +26,15 @@ class YTMachine
     // list of permissions we need
     private $scopes = ['https://www.googleapis.com/auth/youtube.force-ssl'];
 
-    private $googleClient;
-
     function __construct()
     {
-        $this->googleClient = new Google_Client();
+        self::$googleClient = new Google_Client();
         $credentials = new Google_Auth_AssertionCredentials(
             trim(file_get_contents($this->oauth_email_file)),
             $this->scopes,
             file_get_contents($this->oauth_P12_file)
         );
-        $this->googleClient->setAssertionCredentials($credentials);
+        self::$googleClient->setAssertionCredentials($credentials);
     }
 
     /**
@@ -56,7 +53,7 @@ class YTMachine
             // try to go with the right size (will be paginated automatically)
             $criteria->setResultsPageSize($maxCount - sizeof($allVideos));
 
-            $listResults = $this->getYoutube()->search->listSearch('id,snippet', $criteria->getArray());
+            $listResults = self::getYoutube()->search->listSearch('id,snippet', $criteria->getArray());
 
             if (YT_VERBOSE && $nextPageToken == null) {
                 $totalResults = $listResults->getPageInfo()->totalResults;
@@ -86,7 +83,7 @@ class YTMachine
                 $video = new YTVideo(
                     $id->getVideoId(), $snippet->getTitle(), $snippet->getDescription(),
                     $snippet->getPublishedAt(), ($thumb != null) ? $thumb->getUrl() : '',
-                    $criteria->getLanguage(), $this
+                    $criteria->getLanguage()
                 );
                 array_push($allVideos, $video);
             }
@@ -104,7 +101,7 @@ class YTMachine
      */
     public function mergeUniqueVideos(&$into, &$from)
     {
-        $existingIds = array_map(function($video) {
+        $existingIds = array_map(function ($video) {
             return $video->videoId;
         }, $into);
         foreach ($from as $video) {
@@ -115,50 +112,73 @@ class YTMachine
         }
     }
 
-
-    /* @var $youtube Google_Service_YouTube */
-    private $youtube;
-
-    function getYoutube()
+    /**
+     * Sorts an array of YTVideos in place.
+     * @param $videosArray YTVideo[]
+     * @param $order String sorting criteria:
+     */
+    public function sortVideos(&$videosArray, $order)
     {
-        $this->ensureOAuthenticated();
-        // create on demand
-        if ($this->youtube == null)
-            $this->youtube = new Google_Service_YouTube($this->googleClient);
-        return $this->youtube;
+        switch ($order) {
+            case 'views':
+                $sortingFunction = function ($a, $b) {
+                    return $b->countViews - $a->countViews;
+                };
+                break;
+            case 'liked':
+                $sortingFunction = function ($a, $b) {
+                    return $a->countDislikesPct - $b->countDislikesPct;
+                };
+                break;
+            case 'disliked':
+                $sortingFunction = function ($a, $b) {
+                    return $b->countDislikesPct - $a->countDislikesPct;
+                };
+                break;
+            default:
+                die('unsupported sorting order');
+        }
+        usort($videosArray, $sortingFunction);
     }
-
-    // @var $youtubeAnalytics Google_Service_YouTubeAnalytics
-    /*private $youtubeAnalytics;
-
-    function getYoutubeAnalytics()
-    {
-        $this->ensureOAuthenticated();
-        // create on demand
-        if ($this->youtubeAnalytics == null)
-            $this->youtubeAnalytics = new Google_Service_YouTubeAnalytics($this->googleClient);
-        return $this->youtubeAnalytics;
-    }*/
-
 
     /* @var $guzzle \GuzzleHttp\Client() */
-    private $guzzle;
+    /* @var $youtube Google_Service_YouTube */
+    /* @var $youtubeAnalytics Google_Service_YouTubeAnalytics */
+    private static $googleClient;
+    private static $guzzle;
+    private static $youtube;
+    private static $youtubeAnalytics;
 
-    /**
-     * @return \GuzzleHttp\Client
-     */
-    function getGuzzle()
+    static function getGuzzle()
     {
         // create on demand
-        if ($this->guzzle == null)
-            $this->guzzle = new \GuzzleHttp\Client();
-        return $this->guzzle;
+        if (self::$guzzle == null)
+            self::$guzzle = new \GuzzleHttp\Client();
+        return self::$guzzle;
     }
 
-    private function ensureOAuthenticated()
+    static function getYoutube()
     {
-        if ($this->googleClient->getAuth()->isAccessTokenExpired())
-            $this->googleClient->getAuth()->refreshTokenWithAssertion();
+        self::ensureOAuthenticated();
+        // create on demand
+        if (self::$youtube == null)
+            self::$youtube = new Google_Service_YouTube(self::$googleClient);
+        return self::$youtube;
+    }
+
+    static function getYoutubeAnalytics()
+    {
+        self::ensureOAuthenticated();
+        // create on demand
+        if (self::$youtubeAnalytics == null)
+            self::$youtubeAnalytics = new Google_Service_YouTubeAnalytics(self::$googleClient);
+        return self::$youtubeAnalytics;
+    }
+
+    private static function ensureOAuthenticated()
+    {
+        if (self::$googleClient->getAuth()->isAccessTokenExpired())
+            self::$googleClient->getAuth()->refreshTokenWithAssertion();
     }
 }
 
@@ -178,9 +198,12 @@ class YTVideo
     public $desktopUrl;
 
     // after resolveCaptions()
+    /* @var $ytCC YTCC */
+    private $resolvedCaptions = false;
     public $ytCC = null;
 
     // after resolveDetails()
+    private $resolvedDetails = false;
     public $countViews;
     public $countComments;
     public $countLikes;
@@ -192,12 +215,8 @@ class YTVideo
     public $durationS;
     public $tags;
 
-    /* @var $ytMachine YTMachine */
-    private $ytMachine;
-    private $resolvedCaptions = false;
-    private $resolvedDetails = false;
 
-    function __construct($videoId, $title, $description, $publishedAt, $thumbUrl, $language, $ytMachine)
+    function __construct($videoId, $title, $description, $publishedAt, $thumbUrl, $language)
     {
         $this->videoId = $videoId;
         $this->title = $title;
@@ -206,7 +225,6 @@ class YTVideo
         $this->thumbUrl = $thumbUrl;
         $this->language = $language;
         $this->desktopUrl = 'https://www.youtube.com/watch?v=' . $videoId;
-        $this->ytMachine = $ytMachine;
     }
 
     public function resolveDetails()
@@ -222,7 +240,7 @@ class YTVideo
          * @var $cDet Google_Service_YouTube_VideoContentDetails
          */
         // NOTE: could add topicDetails in the future
-        $details = $this->ytMachine->getYoutube()->videos->listVideos('statistics,snippet,contentDetails', ['id' => $this->videoId]);
+        $details = YTMachine::getYoutube()->videos->listVideos('statistics,snippet,contentDetails', ['id' => $this->videoId]);
         $items = $details->getItems();
         if (YT_VIOLENT && sizeof($items) != 1)
             die('Expecting 1 item, got ' . sizeof($items));
@@ -249,15 +267,19 @@ class YTVideo
         $this->durationS = $dt->h * 3600 + $dt->i * 60 + $dt->s;
     }
 
+    /**
+     * @return bool True if successful
+     */
     public function resolveCaptions()
     {
         // do it at most once
         if ($this->resolvedCaptions)
-            return;
+            return $this->ytCC != null;
         $this->resolvedCaptions = true;
 
         // perform the resolution
-        $captionsList = $this->ytMachine->getYoutube()->captions->listCaptions('snippet', $this->videoId);
+        // FIXME: SPEED BOTTLENECK (1/second)
+        $captionsList = YTMachine::getYoutube()->captions->listCaptions('snippet', $this->videoId);
 
         // get all the SRT from this track that match the language
         $ytCCs = [];
@@ -280,26 +302,8 @@ class YTVideo
                 if (YT_VIOLENT)
                     die('wrong status. expected serving, got ' . $ccStatus);
 
-            // Base fetching URL: alternative base: 'http://video.google.com/timedtext?v='
-            $fetchUrl = 'https://www.youtube.com/api/timedtext?v=' . $ccVideoId;
-
-            // add language
-            $ccLang = $cc->getLanguage();
-            if (!empty($ccLang)) {
-                // FILTER: skip if the language is not what we asked for
-                if ($ccLang != $this->language) {
-                    // NOTE: in the future we could also stash other languages for later
-                    if (YT_VERBOSE)
-                        echo $ccVideoId . ',  skipping CC for different language: ' . $ccLang . "\n";
-                    continue;
-                }
-                $fetchUrl .= '&lang=' . $ccLang;
-            }
-
-            // add 'name'
-            $ccName = $cc->getName();
-            if (!empty($ccName))
-                $fetchUrl .= '&name=' . $ccName;
+            // base fetching query
+            $fetchQuery = 'v=' . $ccVideoId;
 
             // add kind
             $ccKind = $cc->getTrackKind();
@@ -316,6 +320,24 @@ class YTVideo
                 continue;
             }
 
+            // add language
+            $ccLang = $cc->getLanguage();
+            if (!empty($ccLang)) {
+                // FILTER: skip if the language is not what we asked for
+                if ($ccLang != $this->language) {
+                    // NOTE: in the future we could also stash other languages for later
+                    if (YT_VERBOSE)
+                        echo $ccVideoId . ',  skipping CC for different language: ' . $ccLang . "\n";
+                    continue;
+                }
+                $fetchQuery .= '&lang=' . $ccLang;
+            }
+
+            // add 'name'
+            $ccTrackName = $cc->getName();
+            if (!empty($ccTrackName))
+                $fetchQuery .= '&name=' . $ccTrackName;
+
             // customize the output format. available formats:
             // srv1: <text start="2.501" dur="3.671">
             // srv2: <timedtext><window t="0" id="1" op="define" rc="15" cc="32" ap="7" ah="50" av="95"/><text w="2" t="5538" d="2536">RE</text>
@@ -324,26 +346,31 @@ class YTVideo
             // srt:  [SubRip   ] 1 \n 00:00:02,501 --> 00:00:06,172 \n THE WASHINGTON CORRESPONDENT
             // ttml: [TTML     ] <p begin="00:00:02.501" end="00:00:06.172" region="r3" style="s2"><span begin="00:00:00.000">TH</span>
             // vtt:  [WebVTT   ] 00:00:02.501 --> 00:00:06.172 align:start position:0% line:7% \n THE WASHINGTON CORRESPONDENT
-            $fetchUrl .= '&fmt=srv1';
+            $fetchQuery .= '&fmt=srv1';
+
+            // Fetch the Caption from cache
+            $ccString = Cacher::retrieveValue('cc_' . $fetchQuery);
 
             // Fetch the Caption (and expect a 200:OK code)
-            try {
-                $msg = $this->ytMachine->getGuzzle()->get($fetchUrl);
-                if ($msg->getStatusCode() != 200) {
+            if ($ccString == null) {
+                try {
+                    $response = YTMachine::getGuzzle()->get('https://www.youtube.com/api/timedtext?' . $fetchQuery);
+                    if ($response->getStatusCode() != 200) {
+                        if (YT_VIOLENT)
+                            die('wrong status code ' . $response->getStatusCode() . ' on ' . $fetchQuery);
+                        continue;
+                    }
+                    $ccString = $response->getBody()->getContents();
+                    Cacher::storeValue('cc_' . $fetchQuery, $ccString, null);
+                } catch (\GuzzleHttp\Exception\ClientException $exception) {
                     if (YT_VIOLENT)
-                        die('wrong status code ' . $msg->getStatusCode() . ' on ' . $fetchUrl);
+                        die('HTTP request failed: ' . $exception);
                     continue;
                 }
-            } catch (\GuzzleHttp\Exception\ClientException $exception) {
-                if (YT_VIOLENT)
-                    die('HTTP request failed: ' . $exception);
-                continue;
             }
 
             // FILTER: Size Heuristic (FIXME): reject semi-empty captions (usually with not much more than the title)
-            $ccBody = $msg->getBody();
-            $ccString = $ccBody->getContents();
-            $ccStringSize = $ccBody->getSize();
+            $ccStringSize = $ccString != null ? strlen($ccString) : 0;
             if ($ccStringSize < self::SUB_OK_THRESHOLD) {
                 if (YT_VERBOSE)
                     echo $ccVideoId . ',  skipping for small size: ' . $ccStringSize . "\n";
@@ -360,24 +387,28 @@ class YTVideo
                 $start = $attributes['start'];
                 $duration = $attributes['dur'];
 
-                if (YT_VIOLENT && (empty($start) || empty($duration)))
-                    die('start or duration empty on ' . $ccVideoId);
-
+                // FILTER: videos that have start but not duration are usually 1-liners
+                if (empty($start) || empty($duration)) {
+                    if (YT_VERBOSE)
+                        echo 'start or duration empty on ' . $ccVideoId . " body: " . $ccString . "\n";
+                    continue;
+                }
             }
 
             // save the fully-fetched caption
             array_push($ytCCs,
-                new YTCC($ccId, $ccVideoId, $ccStringSize, $ccString, $ccXml, $ccName, $cc->getLastUpdated())
+                new YTCC($ccId, $ccVideoId, $ccStringSize, $ccString, $ccXml, $ccTrackName, $cc->getLastUpdated())
             );
         }
 
         // use just best caption amongst those available, chosen by size
         usort($ytCCs, function ($a, $b) {
-            return $b->xmlSize - $a->xmlSize;
+            return $b->ccSize - $a->ccSize;
         });
 
         // pick the best (if any), or null
         $this->ytCC = empty($ytCCs) ? null : $ytCCs[0];
+        return $this->ytCC != null;
     }
 }
 
@@ -385,24 +416,24 @@ class YTCC
 {
     private $id;
     private $videoId;
-    public $stringSize;
-    public $stringData;
+    public $ccSize;
+    //public $ccString;
     public $xml;
     private $trackName;
     private $lastUpdated;
 
-    function __construct($id, $videoId, $stringSize, $string, $xml, $trackName, $lastUpdated)
+    function __construct($id, $videoId, $ccSize, $ccString, $xml, $trackName, $lastUpdated)
     {
         $this->id = $id;
         $this->videoId = $videoId;
-        $this->stringSize = $stringSize;
-        $this->stringData = $string;
+        $this->ccSize = $ccSize;
+        //$this->ccString = $ccString;
         $this->xml = $xml;
         $this->trackName = $trackName;
         $this->lastUpdated = $lastUpdated;
 
         if (YT_VERBOSE)
-            echo $videoId . ',' . $stringSize . ',' . $trackName . ',' . $lastUpdated . ',' . $id . "\n";
+            echo $videoId . ',' . $ccSize . ',' . $trackName . ',' . $lastUpdated . ',' . $id . "\n";
     }
 }
 
