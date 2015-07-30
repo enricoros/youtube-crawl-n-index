@@ -14,14 +14,32 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 require_once __DIR__ . '/../vendor/autoload.php';
+require_once 'Cacher.php';
 require_once 'YTMachine.php';
 
 session_start();
+?>
 
+<!doctype html>
+<html>
+<head>
+    <title>Feed the indexer</title>
+    <link rel="stylesheet" href="css/app.css">
+    <link rel="stylesheet" href="css/normalize.css">
+</head>
+<body>
+<form method="GET">
+    <input type="text" id="queryText" name="queryText" placeholder="search outside...">
+    <input type="text" id="captionText" name="captionText" placeholder="search inside...">
+    <input type="submit" value="GO!">
+</form>
+
+<?php
 // create the YouTube Machine
 $yt = new \YTMachine();
 
 /* @var $videoLeads YTVideo[] */
+/* @var $goodVideos YTVideo[] */
 $videoLeads = [];
 
 // NEED a Twitter pump here... we need serious memes
@@ -30,6 +48,11 @@ $someQueries = [
     'Donald Trump', 'PewDiePie', 'fails 2016',
     'cursing', 'loses control'
 ];
+
+// use the query from the web page, if set
+if (isset($_GET['queryText']))
+    $someQueries = explode(',', $_GET['queryText']);
+
 foreach ($someQueries as $query) {
 
     $criteria = new YTSearchCriteria(trim($query));
@@ -53,4 +76,20 @@ foreach ($videoLeads as $video) {
 
 $yt->sortVideos($goodVideos, 'disliked');
 
-echo 'ok: ' . sizeof($goodVideos) . ' over: ' . sizeof($videos) . "\n";
+if (isset($_GET['captionText']) && !empty($_GET['captionText'])) {
+    $goodVideos = array_filter($goodVideos, function ($video) {
+        return stripos(strval(json_encode($video->ytCC->xml)), $_GET['captionText']);
+    });
+}
+
+//echo 'ok: ' . sizeof($goodVideos) . ' over: ' . sizeof($videoLeads) . "\n";
+?>
+test
+<?php
+foreach ($goodVideos as $video) {
+    echo '<br><img src="' . $video->thumbUrl . '" width="40"  /><br><predator>' . /*strval(json_encode($video->ytCC->xml)) .*/'</predator>';
+}
+?>
+test
+</body>
+</html>
