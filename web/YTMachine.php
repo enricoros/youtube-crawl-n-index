@@ -388,9 +388,15 @@ class YTVideo
             }
 
             // FILTER: parse and validate XML
-            $ccTranscript = new SimpleXMLElement($ccString);
-            if (YT_VIOLENT && $ccTranscript->getName() != 'transcript')
-                die('expected a transcript root element, got a ' . $ccTranscript->getName() . ' instead ');
+            try {
+                $ccTranscript = new SimpleXMLElement($ccString);
+                if (YT_VIOLENT && $ccTranscript->getName() != 'transcript')
+                    die('expected a transcript root element, got a ' . $ccTranscript->getName() . ' instead ');
+            } catch (Exception $e) {
+                if (YT_VERBOSE)
+                    echo 'skipping for xml parsing error' . $ccVideoId . "\n";
+                continue;
+            }
 
             $lines = [];
             $maxLength = 0;
@@ -597,7 +603,7 @@ class YTSearchCriteria
     function setOrder($order)
     {
         $valid = ['date', 'rating', 'relevance' /* def. */, 'title', 'videoCount', 'viewCount'];
-        if (!array_key_exists($order, $valid))
+        if (!in_array($order, $valid))
             die('wrong order: ' . $order);
         $this->criteria['order'] = $order;
         return $this;

@@ -15,7 +15,7 @@ limitations under the License. */
 
 interface IndexMachine
 {
-    const INDEX_NAME = 'cc';
+    const INDEX_NAME = 'yt_cc';
 
     /**
      * @param $objectID String the objectId

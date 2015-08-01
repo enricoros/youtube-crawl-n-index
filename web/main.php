@@ -15,7 +15,7 @@ limitations under the License. */
 
 // configuration
 const SKIP_ALREADY_INDEXED = true;
-const VIDEOS_PER_QUERY = 1000;
+const VIDEOS_PER_QUERY = 100;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once 'CacheMachine.php';
@@ -75,13 +75,19 @@ if (isset($_GET['queryText']))
 
 // B. perform the YT search
 
-// for all the query strings, search N videos
+// for all the query strings, search N videos, for M orders
 $videoLeads = [];
+$orders = [ 'relevance', 'viewCount', 'rating', 'date' ];
 foreach ($someQueries as $query) {
 
-    $criteria = new YTSearchCriteria(trim($query));
-    $videos = $yt->searchVideos($criteria, VIDEOS_PER_QUERY);
-    $yt->mergeUniqueVideos($videoLeads, $videos);
+    foreach ($orders as $order) {
+
+        $criteria = new YTSearchCriteria(trim($query));
+        $criteria->setOrder($order);
+        $videos = $yt->searchVideos($criteria, VIDEOS_PER_QUERY);
+        $yt->mergeUniqueVideos($videoLeads, $videos);
+
+    }
 
 }
 shuffle($videoLeads);
