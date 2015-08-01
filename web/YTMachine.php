@@ -349,7 +349,7 @@ class YTVideo
             $fetchQuery .= '&fmt=srv1';
 
             // Fetch the Caption from cache
-            $ccString = Cacher::retrieveValue('cc_' . $fetchQuery);
+            $ccString = CacheMachine::retrieveValue('cc_' . $fetchQuery);
 
             // Fetch the Caption (and expect a 200:OK code)
             if ($ccString == null) {
@@ -361,7 +361,7 @@ class YTVideo
                         continue;
                     }
                     $ccString = $response->getBody()->getContents();
-                    Cacher::storeValue('cc_' . $fetchQuery, $ccString, null);
+                    CacheMachine::storeValue('cc_' . $fetchQuery, $ccString, null);
                 } catch (\GuzzleHttp\Exception\ClientException $exception) {
                     if (YT_VIOLENT)
                         die('HTTP request failed: ' . $exception);

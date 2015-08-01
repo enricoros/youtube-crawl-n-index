@@ -13,8 +13,17 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-class Cacher
+class CacheMachine
 {
+    /**
+     * @param $key String
+     * @return bool true if the key exists (and redis is up)
+     */
+    public static function hasKey($key)
+    {
+        $client = self::getPRedisClient();
+        return $client != null && $client->exists($key);
+    }
 
     /**
      * @param $key String

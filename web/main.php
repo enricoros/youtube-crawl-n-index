@@ -13,11 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+// configuration
+const SKIP_ALREADY_INDEXED = true;
+const VIDEOS_PER_QUERY = 20;
+
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once 'CacheMachine.php';
-require_once 'IndexMachine.php';
 require_once 'YTMachine.php';
-
+require_once 'IndexMachine_Algolia.php';
 session_start();
 ?>
 
@@ -29,6 +32,10 @@ session_start();
     <link rel="stylesheet" href="css/normalize.css">
 </head>
 <body>
+<p>
+    Note: this page will add new videos to the overall index, if none are returned, it means that
+    probably they have already been indexed.
+</p>
 <form method="GET">
     <input type="text" id="queryText" name="queryText" placeholder="search outside...">
     <input type="text" id="captionText" name="captionText" placeholder="search inside...">
@@ -44,12 +51,14 @@ session_start();
 
 
 <?php
-// create the YouTube Machine
-$yt = new \YTMachine();
-
 /* @var $videoLeads YTVideo[] */
-/* @var $goodVideos YTVideo[] */
-$videoLeads = [];
+/* @var $newVideos YTVideo[] */
+
+// create the global objects
+$yt = new \YTMachine();
+$im = new \IndexMachine_Algolia();
+
+// A. start with the YT search query
 
 // NEED a Twitter pump here... we need serious memes
 $someQueries = [
@@ -62,43 +71,68 @@ $someQueries = [
 if (isset($_GET['queryText']))
     $someQueries = explode(',', $_GET['queryText']);
 
+
+// B. perform the YT search
+
+// for all the query strings, search N videos
+$videoLeads = [];
 foreach ($someQueries as $query) {
 
     $criteria = new YTSearchCriteria(trim($query));
-    $videos = $yt->searchVideos($criteria, 10);
+    $videos = $yt->searchVideos($criteria, VIDEOS_PER_QUERY);
     $yt->mergeUniqueVideos($videoLeads, $videos);
 
 }
-
 shuffle($videoLeads);
-echo 'processing ' . sizeof($videoLeads) . ' video leads' . "\n<br>";
+echo '<div>processing ' . sizeof($videoLeads) . ' video leads' . "</div>\n";
 
-// fetch all the captions (and also more details for videos with captions.. and drop the rest)
-$goodVideos = [];
+
+// C. process each video: get caption, get details, send to index
+
+$newVideos = [];
 foreach ($videoLeads as $video) {
 
-    if ($video->resolveCaptions()) {
-        $video->resolveDetails();
-        array_push($goodVideos, $video);
-        echo '.';
-    } else
+    // OPTIMIZATION: skip resolving if we already did it in the past and
+    // the video has already been indexed (or we know it can't be).
+    $videoUsableKey = 'use_' . $video->videoId;
+    if (SKIP_ALREADY_INDEXED && CacheMachine::hasKey($videoUsableKey))
+        continue;
+
+    // resolve the captions, and skip if failed
+    if (!$video->resolveCaptions()) {
         echo 'x';
+        CacheMachine::storeValue($videoUsableKey, false, null);
+        continue;
+    }
+
+    // also resolve details: numbers of views, etc.
+    $video->resolveDetails();
+
+    // send it to the Index (to be indexed)
+    $im->addOrUpdate($video->videoId, $video);
+
+    // video processed
+    array_push($newVideos, $video);
+    CacheMachine::storeValue($videoUsableKey, true, null);
+    echo '.';
 
 }
 
-$yt->sortVideos($goodVideos, 'disliked');
 
+// TEMP: manual filter just for rendering in the web page - will replace this with Index search
 if (isset($_GET['captionText']) && !empty($_GET['captionText'])) {
-    $goodVideos = array_filter($goodVideos, function ($video) {
+    $newVideos = array_filter($newVideos, function ($video) {
         return stripos(strval(json_encode($video->ytCC->xml)), $_GET['captionText']);
     });
 }
 
-echo 'ok: ' . sizeof($goodVideos) . ' over: ' . sizeof($videoLeads) . "\n<br>";
-foreach ($goodVideos as $video) {
-    echo '<br><img src="' . $video->thumbUrl . '" width="40"  /><br><predator>' . /*strval(json_encode($video->ytCC->xml)) .*/'</predator>';
-}
+// TEMP: play emotions :)
+$yt->sortVideos($newVideos, 'disliked');
 
+// TEMP: show images of the newly fetched
+echo '<div>new and usable: ' . sizeof($newVideos) . ' over: ' . sizeof($videoLeads) . "</div>\n";
+foreach ($newVideos as $video)
+    echo '<div><img src="' . $video->thumbUrl . '" width="140"  />' . /*strval(json_encode($video->ytCC->xml)) .*/"</div>\n";
 ?>
 
 </body>
