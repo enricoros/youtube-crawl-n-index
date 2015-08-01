@@ -16,6 +16,9 @@ limitations under the License. */
 define('YT_VIOLENT', true);
 define('YT_VERBOSE', false);
 define('YT_LANG_FILTER', 'en');
+define('YT_MIN_VALID_CHARS', 4);    // chars per line
+define('YT_MIN_VALID_LINES', 5);    // lines per CC
+
 
 class YTMachine
 {
@@ -127,12 +130,12 @@ class YTMachine
                 break;
             case 'liked':
                 $sortingFunction = function ($a, $b) {
-                    return $a->countDislikesPct - $b->countDislikesPct;
+                    return $b->pctLikes - $a->pctLikes;
                 };
                 break;
             case 'disliked':
                 $sortingFunction = function ($a, $b) {
-                    return $b->countDislikesPct - $a->countDislikesPct;
+                    return $b->pctDislikes - $a->pctDislikes;
                 };
                 break;
             default:
@@ -147,7 +150,8 @@ class YTMachine
     private static $googleClient;
     private static $guzzle;
     private static $youtube;
-    private static $youtubeAnalytics;
+
+    //private static $youtubeAnalytics;
 
     static function getGuzzle()
     {
@@ -166,14 +170,14 @@ class YTMachine
         return self::$youtube;
     }
 
-    static function getYoutubeAnalytics()
+    /*static function getYoutubeAnalytics()
     {
         self::ensureOAuthenticated();
         // create on demand
         if (self::$youtubeAnalytics == null)
             self::$youtubeAnalytics = new Google_Service_YouTubeAnalytics(self::$googleClient);
         return self::$youtubeAnalytics;
-    }
+    }*/
 
     private static function ensureOAuthenticated()
     {
@@ -198,8 +202,8 @@ class YTVideo
     public $desktopUrl;
 
     // after resolveCaptions()
-    /* @var $ytCC YTCC */
     private $resolvedCaptions = false;
+    /* @var $ytCC YTCC */
     public $ytCC = null;
 
     // after resolveDetails()
@@ -208,11 +212,14 @@ class YTVideo
     public $countComments;
     public $countLikes;
     public $countDislikes;
-    public $countDislikesPct;
     public $countFavorites;
+    public $pctComments;
+    public $pctLikes;
+    public $pctDislikes;
+    public $pctFavorites;
     public $channelId;
     public $channelTitle;
-    public $durationS;
+    public $duration; // in seconds
     public $tags;
 
 
@@ -248,12 +255,15 @@ class YTVideo
 
         // counters
         $stat = $item->getStatistics();
-        $this->countViews = $stat->getViewCount();
-        $this->countComments = $stat->getCommentCount();
-        $this->countLikes = $stat->getLikeCount();
-        $this->countDislikes = $stat->getDislikeCount();
-        $this->countFavorites = $stat->getFavoriteCount();
-        $this->countDislikesPct = $this->countViews > 0 ? (100 * $this->countDislikes / $this->countViews) : 0;
+        $this->countViews = intval($stat->getViewCount());
+        $this->countComments = intval($stat->getCommentCount());
+        $this->countLikes = intval($stat->getLikeCount());
+        $this->countDislikes = intval($stat->getDislikeCount());
+        $this->countFavorites = intval($stat->getFavoriteCount());
+        $this->pctComments = $this->countViews > 0 ? (100 * $this->countComments / $this->countViews) : 0;
+        $this->pctLikes = $this->countViews > 0 ? (100 * $this->countLikes / $this->countViews) : 0;
+        $this->pctDislikes = $this->countViews > 0 ? (100 * $this->countDislikes / $this->countViews) : 0;
+        $this->pctFavorites = $this->countViews > 0 ? (100 * $this->countFavorites / $this->countViews) : 0;
 
         // additional info (tags, channel)
         $snip = $item->getSnippet();
@@ -264,7 +274,7 @@ class YTVideo
         // duration (ignoring: definition(hd), dimension(2d), caption(true), contentRating, countryRestriction, regionRestriction)
         $cDet = $item->getContentDetails();
         $dt = new DateInterval($cDet->getDuration());
-        $this->durationS = $dt->h * 3600 + $dt->i * 60 + $dt->s;
+        $this->duration = $dt->h * 3600 + $dt->i * 60 + $dt->s;
     }
 
     /**
@@ -377,27 +387,51 @@ class YTVideo
                 continue;
             }
 
-            // FILTER: parse and validate XML?
-            $ccXml = new SimpleXMLElement($ccString);
-            if (YT_VIOLENT && $ccXml->getName() != 'transcript')
-                die('expected a transcript, got a ' . $ccXml->getName() . ' instead ');
-            foreach ($ccXml->text AS $text) {
-                //$line = strval($text);
-                $attributes = $text->attributes();
-                $start = $attributes['start'];
-                $duration = $attributes['dur'];
+            // FILTER: parse and validate XML
+            $ccTranscript = new SimpleXMLElement($ccString);
+            if (YT_VIOLENT && $ccTranscript->getName() != 'transcript')
+                die('expected a transcript root element, got a ' . $ccTranscript->getName() . ' instead ');
+
+            $lines = [];
+            $maxLength = 0;
+            foreach ($ccTranscript->text AS $line) {
+                // skip lines with less than YT_MIN_VALID_CHARS chars
+                $text = $this->fixSrv1Caption(strval($line));
+                $textLength = strlen($text);
+                if ($textLength < YT_MIN_VALID_CHARS)
+                    continue;
+                if ($textLength > $maxLength)
+                    $maxLength = $textLength;
 
                 // FILTER: videos that have start but not duration are usually 1-liners
+                $attributes = $line->attributes();
+                $start = $attributes['start'];
+                $duration = $attributes['dur'];
                 if (empty($start) || empty($duration)) {
                     if (YT_VERBOSE)
-                        echo 'start or duration empty on ' . $ccVideoId . " body: " . $ccString . "\n";
+                        echo 'skipping for start or duration empty on ' . $ccVideoId . " body: " . $ccString . "\n";
                     continue;
                 }
+
+                // add the line
+                array_push($lines, [
+                    "t" => $text,
+                    "s" => floatval($start),
+                    "d" => floatval($duration),
+                    "e" => floatval($start) + floatval($duration)
+                ]);
+            }
+
+            // FILTER: almost-empty docs, or docs with at most 3 letters per line
+            if ($maxLength < YT_MIN_VALID_CHARS || sizeof($lines) < YT_MIN_VALID_LINES) {
+                if (YT_VERBOSE)
+                    echo 'skipping for emptiness  ' . sizeof($lines) . " lines and " . $maxLength . " max chars per line\n";
+                continue;
             }
 
             // save the fully-fetched caption
             array_push($ytCCs,
-                new YTCC($ccId, $ccVideoId, $ccStringSize, $ccString, $ccXml, $ccTrackName, $cc->getLastUpdated())
+                new YTCC($ccId, $ccVideoId, $ccTrackName, $ccStringSize, $ccString, $lines, $cc->getLastUpdated())
             );
         }
 
@@ -410,31 +444,98 @@ class YTVideo
         $this->ytCC = empty($ytCCs) ? null : $ytCCs[0];
         return $this->ytCC != null;
     }
+
+    /**
+     * @param $objectID String the ID of the object in the Search system
+     * @return array Object to be uploaded to the Indexing - this defines our search ABI
+     */
+    public function toSearchable($objectID)
+    {
+        $videoObj = [
+            "objectID" => $objectID,
+
+            "videoId" => $this->videoId,
+            "title" => $this->title,
+            "description" => $this->description,
+            "publishedAt" => $this->publishedAt,
+            "thumbUrl" => $this->thumbUrl,
+            "language" => $this->language,
+            "desktopUrl" => $this->desktopUrl,
+
+            "countViews" => $this->countViews,
+            "countComments" => $this->countComments,
+            "countLikes" => $this->countLikes,
+            "countDislikes" => $this->countDislikes,
+            "countFavorites" => $this->countFavorites,
+            "pctComments" => $this->pctComments,
+            "pctLikes" => $this->pctLikes,
+            "pctDislikes" => $this->pctDislikes,
+            "pctFavorites" => $this->pctFavorites,
+
+            "channelId" => $this->channelId,
+            "channelTitle" => $this->channelTitle,
+
+            "duration" => $this->duration,
+
+            "tags" => $this->tags
+        ];
+        return array_merge($videoObj, $this->ytCC->toSearchable());
+    }
+
+    private function fixSrv1Caption($line)
+    {
+        $line = str_replace('&#39;', "'", $line);
+        $line = str_replace('&quot;', '"', $line);
+        $line = str_replace('&gt;', '>', $line);
+        $line = str_replace('&lt;', '<', $line);
+        $line = str_replace('&nbsp;', ' ', $line);
+        $line = str_replace("\n", ' ', $line);
+        $line = str_replace('&amp;', '&', $line);
+        if (YT_VERBOSE && stripos($line, '&') > 0)
+            echo "\nfix parsing of <" . $line . ">\n";
+        return $line;
+    }
 }
 
 class YTCC
 {
-    private $id;
-    private $videoId;
-    public $ccSize;
+    private $ccId;
+    //private $videoIdRef;
+    private $ccTrackName;
+    public $ccSize; // public to be used as ranking criteria in sort function
     //public $ccString;
-    public $xml;
-    private $trackName;
+    private $text;
     private $lastUpdated;
 
-    function __construct($id, $videoId, $ccSize, $ccString, $xml, $trackName, $lastUpdated)
+
+    function __construct($ccId, $videoId, $ccTrackName, $ccSize, $ccString, $lines, $lastUpdated)
     {
-        $this->id = $id;
-        $this->videoId = $videoId;
+        $this->ccId = $ccId;
+        //$this->videoIdRef = $videoId;
+        $this->ccTrackName = $ccTrackName;
         $this->ccSize = $ccSize;
         //$this->ccString = $ccString;
-        $this->xml = $xml;
-        $this->trackName = $trackName;
+        $this->text = $lines;
         $this->lastUpdated = $lastUpdated;
 
         if (YT_VERBOSE)
-            echo $videoId . ',' . $ccSize . ',' . $trackName . ',' . $lastUpdated . ',' . $id . "\n";
+            echo $videoId . ',' . $ccSize . ',' . $ccTrackName . ',' . $lastUpdated . ',' . $ccId . "\n";
     }
+
+    /**
+     * @return array Object to be uploaded to the Indexing - this defines our search ABI
+     */
+    public function toSearchable()
+    {
+        return [
+            "ccId" => $this->ccId,
+            "ccTrackName" => $this->ccTrackName,
+            "ccSize" => $this->ccSize,
+            "lastUpdated" => $this->lastUpdated,
+            "text" => $this->text
+        ];
+    }
+
 }
 
 class YTSearchCriteria

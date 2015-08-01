@@ -13,6 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+require_once 'IndexMachine.php';
+
 define('IM_VIOLENT', true);
 define('IM_VERBOSE', true);
 
@@ -30,21 +32,26 @@ class IndexMachine_Algolia implements IndexMachine
         $this->client = new \AlgoliaSearch\Client("2TRUTQVPX8", trim(file_get_contents(self::ALGOLIA_API_KEY)));
 
         // create or retrieve the index
-        $this->index = $this->client->initIndex(IndexMachine::INDEX_NAME);
+        $this->index = $this->client->initIndex(self::INDEX_NAME);
         //$this->index->clearIndex();
         $this->updateIndexAndSearchSettings();
     }
 
-    public function addOrUpdate($objectIndex, $newObject)
+    /**
+     * @inheritdoc
+     */
+    public function addOrUpdate($objectID, $ytVideo)
     {
-        echo $newObject;
-
-
-        /*$res = $this->index->saveObject([
-            "firstname" => "Jimmie",
-            "lastname" => "Barninger",
-            "objectID" => "myID1"
-        ]);*/
+        try {
+            $res = $this->index->saveObject($ytVideo->toSearchable($objectID));
+        } catch (\AlgoliaSearch\AlgoliaException $e) {
+            // failed because it's too big
+            if (strpos($e->getMessage(), 'Record is too big') == 0)
+                return false;
+            // other failure reasons
+            return false;
+        }
+        return $res['objectID'] == $objectID;
     }
 
     /// private stuff ahead ///
@@ -57,6 +64,5 @@ class IndexMachine_Algolia implements IndexMachine
             "customRanking" => array("desc(vote_count)", "asc(name)")
         ));*/
     }
-
 
 }

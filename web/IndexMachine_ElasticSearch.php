@@ -13,6 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+require_once 'IndexMachine.php';
+
 define('IM_VIOLENT', true);
 define('IM_VERBOSE', true);
 
@@ -28,15 +30,15 @@ class IndexMachine_ElasticSearch implements IndexMachine
         $this->client = new Elasticsearch\Client([
             'hosts' => [$hostname]
         ]);
-        $this->defaultIndex = new TypedIndex(IndexMachine::INDEX_NAME, self::IM_TYPE, $this->client);
+        $this->defaultIndex = new TypedIndex(self::INDEX_NAME, self::IM_TYPE, $this->client);
     }
 
-    public function addOrUpdate($index, $content)
+    public function addOrUpdate($objectID, $ytVideo)
     {
         $params = [
-            'index' => IM_INDEX,
-            'type' => IM_TYPE,
-            'id' => $index,
+            'index' => self::INDEX_NAME,
+            'type' => self::IM_TYPE,
+            'id' => $objectID,
             'ignore' => [400, 404]
         ];
         echo $this->client->get($params);

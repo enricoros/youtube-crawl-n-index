@@ -45,6 +45,7 @@ session_start();
     Some Queries:
     <ul>
         <li>570 wifi base stations</li>
+        <li>you are going to fail</li>
         <li>...</li>
     </ul>
 </div>
@@ -89,18 +90,21 @@ echo '<div>processing ' . sizeof($videoLeads) . ' video leads' . "</div>\n";
 
 // C. process each video: get caption, get details, send to index
 
+echo '[';
 $newVideos = [];
 foreach ($videoLeads as $video) {
 
     // OPTIMIZATION: skip resolving if we already did it in the past and
     // the video has already been indexed (or we know it can't be).
     $videoUsableKey = 'use_' . $video->videoId;
-    if (SKIP_ALREADY_INDEXED && CacheMachine::hasKey($videoUsableKey))
+    if (SKIP_ALREADY_INDEXED && CacheMachine::hasKey($videoUsableKey)) {
+        echo ' ';
         continue;
+    }
 
     // resolve the captions, and skip if failed
     if (!$video->resolveCaptions()) {
-        echo 'x';
+        echo 'C';
         CacheMachine::storeValue($videoUsableKey, false, null);
         continue;
     }
@@ -109,7 +113,8 @@ foreach ($videoLeads as $video) {
     $video->resolveDetails();
 
     // send it to the Index (to be indexed)
-    $im->addOrUpdate($video->videoId, $video);
+    if (!$im->addOrUpdate($video->videoId, $video))
+        echo 'S';
 
     // video processed
     array_push($newVideos, $video);
@@ -117,6 +122,7 @@ foreach ($videoLeads as $video) {
     echo '.';
 
 }
+echo "]\n";
 
 
 // TEMP: manual filter just for rendering in the web page - will replace this with Index search

@@ -17,5 +17,11 @@ interface IndexMachine
 {
     const INDEX_NAME = 'cc';
 
-    public function addOrUpdate($index, $content);
+    /**
+     * @param $objectID String the objectId
+     * @param $ytVideo YTVideo a valid object to index - transformation will happen inside, not outside
+     * @return bool true if the operation was successful
+     */
+    public function addOrUpdate($objectID, $ytVideo);
+
 }
