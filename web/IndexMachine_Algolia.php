@@ -59,10 +59,19 @@ class IndexMachine_Algolia implements IndexMachine
     private function updateIndexAndSearchSettings()
     {
         // TODO
-        /*$this->index->setSettings(array(
-            "attributesToIndex" => array("name", "description", "url"),
-            "customRanking" => array("desc(vote_count)", "asc(name)")
-        ));*/
+        $this->index->setSettings(array(
+            "attributesToIndex" => array("text.t", "tags", "description", "title"),
+            "customRanking" => array("desc(pct_comments)", "desc(countViews)")
+        ));
+
+        /*$res = $this->index->search(
+            "\"steve jobs is\""
+        , [
+            "attributesToRetrieve" => "ccSize,title",
+            "attributesToHighlight" => "text.t",
+            "typoTolerance" => "strict"
+        ]);
+        echo $res;*/
     }
 
 }

@@ -15,7 +15,7 @@ limitations under the License. */
 
 // configuration
 const SKIP_ALREADY_INDEXED = true;
-const VIDEOS_PER_QUERY = 20;
+const VIDEOS_PER_QUERY = 1000;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once 'CacheMachine.php';
@@ -64,8 +64,8 @@ $im = new \IndexMachine_Algolia();
 // NEED a Twitter pump here... we need serious memes
 $someQueries = [
     'Steve Jobs', 'Obama', 'Elon Musk',
-    'Donald Trump', 'PewDiePie', 'fails 2016',
-    'cursing', 'loses control'
+    'Donald Trump', 'PewDiePie',
+    'loses control'
 ];
 
 // use the query from the web page, if set
