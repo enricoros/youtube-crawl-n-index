@@ -23,8 +23,8 @@ define('YT_MIN_VALID_LINES', 5);    // lines per CC
 class YTMachine
 {
     // cloud console data
-    private $oauth_email_file = '../../thats-what-he-said-2040b1e37d61.email.txt';
-    private $oauth_P12_file = '../../thats-what-he-said-2040b1e37d61.p12';
+    private $oauth_email_file = '../../twhs-2040b1e37d61.email.txt';
+    private $oauth_P12_file = '../../twhs-2040b1e37d61.p12';
 
     // list of permissions we need
     private $scopes = ['https://www.googleapis.com/auth/youtube.force-ssl'];

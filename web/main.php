@@ -34,7 +34,9 @@ session_start();
 <body>
 <p>
     Note: this page will add new videos to the overall index, if none are returned, it means that
-    probably they have already been indexed.
+    probably they have already been indexed.<br>
+    Enter a comma-separated list of query snippets below, and the corresponding videos will be
+    indexed in the minutes after.
 </p>
 <form method="GET">
     <input type="text" id="queryText" name="queryText" placeholder="search outside...">
@@ -64,8 +66,7 @@ $im = new \IndexMachine_Algolia();
 // NEED a Twitter pump here... we need serious memes
 $someQueries = [
     'Steve Jobs', 'Obama', 'Elon Musk',
-    'Donald Trump', 'PewDiePie',
-    'loses control'
+    'Donald Trump', 'PewDiePie'
 ];
 
 // use the query from the web page, if set
