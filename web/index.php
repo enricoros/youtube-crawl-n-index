@@ -27,7 +27,7 @@ session_start();
 <!doctype html>
 <html>
 <head>
-    <title>Feed the indexer</title>
+    <title>Feed the Trolls</title>
     <link rel="stylesheet" href="css/app.css">
     <link rel="stylesheet" href="css/normalize.css">
 </head>
@@ -40,7 +40,8 @@ session_start();
         This page will add new captioned videos to the overall index (if not already present).<br>
         Enter a comma-separated list of query snippets below, and the corresponding videos will be
         indexed in the minutes after.<br>
-        Each 'query' is searched 4 times, by 'relevance', 'viewCount', 'rating', and 'date'.
+        Each 'query' is searched 4 times, by 'relevance', 'viewCount', 'rating', and 'date'.<br>
+        Search is restricted to video that are: Close Captioned, HD, embeddable, 'en'glish,. Safesearch Off.<br>
     </p>
 
     <form method="GET">
@@ -49,6 +50,7 @@ session_start();
         <input type="submit" value="GO!">
     </form>
     <ul>
+        <li>science, technology, entertainment, funny, futuristic, chemistry, physics</li>
         <li>Steve Jobs, Obama ,Elon Musk, Donald Trump, PewDiePie</li>
         <li>570 wifi base stations</li>
         <li>you are going to fail</li>
@@ -99,12 +101,12 @@ echo 'gotten: ' . sizeof($videoLeads) . " yt video leads\n";
 
 echo "processing:\n[";
 $newVideos = [];
-$n = 0;
+$n = 1;
 foreach ($videoLeads as $video) {
     // (cosmetic) add some page breaks within the pre
-    if ($n++ > 50) {
+    if ($n++ > 100) {
         $n = 0;
-        echo "\n";
+        echo ",\n";
     }
 
     // OPTIMIZATION: skip resolving if we already did it in the past and
