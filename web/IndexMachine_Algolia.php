@@ -60,10 +60,11 @@ class IndexMachine_Algolia implements IndexMachine
 
     private function updateIndexAndSearchSettings()
     {
-        // TODO
+        // set our default settings - leave some things changeable from the console
         $this->index->setSettings(array(
             "attributesToIndex" => [ "unordered(text.t)" /*, "tags", "description", "title"*/ ],
-            "customRanking" => [ "desc(pct_comments)", "desc(countViews)" ],
+//            "customRanking" => [ "desc(pct_comments)", "desc(countViews)" ],
+//            "customRanking" => [ "desc(countViews)", "desc(pct_comments)" ],
             "unretrievableAttributes" => [],
             "attributesForFaceting" => [ "_tags" ],
             "highlightPreTag" => "<em>",

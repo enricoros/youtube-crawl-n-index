@@ -50,6 +50,7 @@ session_start();
         <input type="submit" value="GO!">
     </form>
     <ul>
+        <li>cult movies, tv shows, youtube channels, cartoons, memes</li>
         <li>science, technology, entertainment, funny, futuristic, chemistry, physics</li>
         <li>Steve Jobs, Obama ,Elon Musk, Donald Trump, PewDiePie</li>
         <li>570 wifi base stations</li>

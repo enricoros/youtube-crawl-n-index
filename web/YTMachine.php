@@ -556,6 +556,9 @@ class YTSearchCriteria
         $this->criteria['videoCaption'] = 'closedCaption';
         $this->criteria['safeSearch'] = 'none';
         $this->criteria['videoEmbeddable'] = 'true';
+        // both to be validated
+        $this->criteria['regionCode'] = 'US';
+        $this->criteria['paidContent'] = 'false';
         $this->setLanguage(YT_LANG_FILTER);
         $this->setResultsPageSize(40);
         $this->setHD(true);
