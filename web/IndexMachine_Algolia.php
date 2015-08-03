@@ -26,13 +26,15 @@ class IndexMachine_Algolia implements IndexMachine
     private $client;
     private $index;
 
-    function __construct()
+    function __construct($indexName)
     {
         // create the client
         $this->client = new \AlgoliaSearch\Client("2TRUTQVPX8", trim(file_get_contents(self::ALGOLIA_API_KEY)));
 
         // create or retrieve the index
-        $this->index = $this->client->initIndex(self::INDEX_NAME);
+        if (!isset($indexName) || empty($indexName))
+            $indexName = self::INDEX_NAME;
+        $this->index = $this->client->initIndex($indexName);
         //$this->index->clearIndex();
         $this->updateIndexAndSearchSettings();
     }
@@ -60,18 +62,20 @@ class IndexMachine_Algolia implements IndexMachine
     {
         // TODO
         $this->index->setSettings(array(
-            "attributesToIndex" => array("text.t", "tags", "description", "title"),
-            "customRanking" => array("desc(pct_comments)", "desc(countViews)")
+            "attributesToIndex" => [ "unordered(text.t)" /*, "tags", "description", "title"*/ ],
+            "customRanking" => [ "desc(pct_comments)", "desc(countViews)" ],
+            "unretrievableAttributes" => [],
+            "attributesForFaceting" => [ "_tags" ],
+            "highlightPreTag" => "<em>",
+            "highlightPostTag" => "</em>"
         ));
+    }
 
-        /*$res = $this->index->search(
-            "\"steve jobs is\""
-        , [
-            "attributesToRetrieve" => "ccSize,title",
-            "attributesToHighlight" => "text.t",
-            "typoTolerance" => "strict"
-        ]);
-        echo $res;*/
+    public function echoIndexSettings()
+    {
+        echo "<pre>";
+        print_r($this->index->getSettings());
+        echo "</pre>\n";
     }
 
 }

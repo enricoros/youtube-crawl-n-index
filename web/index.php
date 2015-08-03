@@ -32,53 +32,54 @@ session_start();
     <link rel="stylesheet" href="css/normalize.css">
 </head>
 <body>
-<p>
-    Note: this page will add new videos to the overall index, if none are returned, it means that
-    probably they have already been indexed.<br>
-    Enter a comma-separated list of query snippets below, and the corresponding videos will be
-    indexed in the minutes after.
-</p>
-<form method="GET">
-    <input type="text" id="queryText" name="queryText" placeholder="search outside...">
-    <input type="text" id="captionText" name="captionText" placeholder="search inside...">
-    <input type="submit" value="GO!">
-</form>
-<div>
-    Some Queries:
+<h3> Add new captioned videos to the Index. </h3>
+
+<section>
+
+    <p>
+        This page will add new captioned videos to the overall index (if not already present).<br>
+        Enter a comma-separated list of query snippets below, and the corresponding videos will be
+        indexed in the minutes after.<br>
+        Each 'query' is searched 4 times, by 'relevance', 'viewCount', 'rating', and 'date'.
+    </p>
+
+    <form method="GET">
+        <input type="text" id="queryText" name="queryText"
+               placeholder="search videos..." <?php if (isset($_GET['queryText'])) echo 'value="' . $_GET['queryText'] . '"'; ?>>
+        <input type="submit" value="GO!">
+    </form>
     <ul>
+        <li>Steve Jobs, Obama ,Elon Musk, Donald Trump, PewDiePie</li>
         <li>570 wifi base stations</li>
         <li>you are going to fail</li>
         <li>...</li>
     </ul>
-</div>
 
 
+    <pre>
 <?php
 /* @var $videoLeads YTVideo[] */
 /* @var $newVideos YTVideo[] */
 
 // create the global objects
 $yt = new \YTMachine();
-$im = new \IndexMachine_Algolia();
+$im = new \IndexMachine_Algolia(isset($_GET['index']) ? 'yt_' . $_GET['index'] : '');
 
 // A. start with the YT search query
 
 // NEED a Twitter pump here... we need serious memes
-$someQueries = [
-    'Steve Jobs', 'Obama', 'Elon Musk',
-    'Donald Trump', 'PewDiePie'
-];
+$someQueries = [];
 
 // use the query from the web page, if set
 if (isset($_GET['queryText']))
     $someQueries = explode(',', $_GET['queryText']);
 
 
-// B. perform the YT search
+// B. perform the YT search(es): N(queries) * M(rankings)
 
 // for all the query strings, search N videos, for M orders
 $videoLeads = [];
-$orders = [ 'relevance', 'viewCount', 'rating', 'date' ];
+$orders = ['relevance', 'viewCount', 'rating', 'date'];
 foreach ($someQueries as $query) {
 
     foreach ($orders as $order) {
@@ -92,14 +93,19 @@ foreach ($someQueries as $query) {
 
 }
 shuffle($videoLeads);
-echo '<div>processing ' . sizeof($videoLeads) . ' video leads' . "</div>\n";
-
+echo 'gotten: ' . sizeof($videoLeads) . " yt video leads\n";
 
 // C. process each video: get caption, get details, send to index
 
-echo '[';
+echo "processing:\n[";
 $newVideos = [];
+$n = 0;
 foreach ($videoLeads as $video) {
+    // (cosmetic) add some page breaks within the pre
+    if ($n++ > 50) {
+        $n = 0;
+        echo "\n";
+    }
 
     // OPTIMIZATION: skip resolving if we already did it in the past and
     // the video has already been indexed (or we know it can't be).
@@ -131,22 +137,17 @@ foreach ($videoLeads as $video) {
 }
 echo "]\n";
 
-
-// TEMP: manual filter just for rendering in the web page - will replace this with Index search
-if (isset($_GET['captionText']) && !empty($_GET['captionText'])) {
-    $newVideos = array_filter($newVideos, function ($video) {
-        return stripos(strval(json_encode($video->ytCC->xml)), $_GET['captionText']);
-    });
-}
-
 // TEMP: play emotions :)
 $yt->sortVideos($newVideos, 'disliked');
 
 // TEMP: show images of the newly fetched
-echo '<div>new and usable: ' . sizeof($newVideos) . ' over: ' . sizeof($videoLeads) . "</div>\n";
+echo '<div>new indexed: ' . sizeof($newVideos) . "\n";
 foreach ($newVideos as $video)
-    echo '<div><img src="' . $video->thumbUrl . '" width="140"  />' . /*strval(json_encode($video->ytCC->xml)) .*/"</div>\n";
+    echo '<div><img src="' . $video->thumbUrl . '" width="140"  />' . /*strval(json_encode($video->ytCC->xml)) .*/
+        "</div>\n";
 ?>
+    </pre>
+</section>
 
 </body>
 </html>

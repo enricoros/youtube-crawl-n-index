@@ -483,7 +483,8 @@ class YTVideo
 
             "duration" => $this->duration,
 
-            "tags" => $this->tags
+            // the '_tags' is an Algolia default mapping
+            "_tags" => $this->tags
         ];
         return array_merge($videoObj, $this->ytCC->toSearchable());
     }
