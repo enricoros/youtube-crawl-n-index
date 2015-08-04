@@ -34,7 +34,8 @@ $indexMachine = new \IndexMachine_Algolia(isset($_GET['index']) ? 'yt_' . $_GET[
 // loop until there's work
 do {
     // let's go with the current query
-    echo "crawling for: " . $workingQuery . "\n";
+    $outPrefix = 'Q: ' . $workingQuery . ': ';
+    echo $outPrefix . "started\n";
     $someQueries = [ $workingQuery ];
 
     // search youtube for N queries, for M (4) ordering criteria
@@ -53,8 +54,8 @@ do {
 
         }
     }
-    echo 'found ' . sizeof($videoLeads) . " yt video leads.\n";
-    echo "processing:\n[";
+    echo $outPrefix . sizeof($videoLeads) . " found\n";
+    echo $outPrefix . 'processing [';
 
     // process each video: get caption, get details, send to index
     /* @var $videoLeads YTVideo[] */
@@ -62,12 +63,6 @@ do {
     $n = 1;
     shuffle($videoLeads);
     foreach ($videoLeads as $video) {
-        // (cosmetic) add some page breaks
-        if ($n++ >= 50) {
-            $n = 0;
-            echo ",\n";
-        }
-
         // OPTIMIZATION: skip resolving if we already did it in the past and
         // the video has already been indexed (or we know it can't be).
         $videoUsableKey = 'use_' . $video->videoId;
@@ -99,9 +94,12 @@ do {
         echo '.';
     }
     echo "]\n";
-    echo 'indexed: ' . sizeof($newVideos) . "\n";
+    echo $outPrefix . sizeof($newVideos) . " indexed\n";
 
     // done
     work_doneWithMyCurrent();
 
 } while ($workingQuery = work_getOneForMe());
+
+// all done for me
+echo "\n";

@@ -87,7 +87,7 @@ class YTMachine
                 $video = new YTVideo(
                     $id->getVideoId(), $snippet->getTitle(), $snippet->getDescription(),
                     $snippet->getPublishedAt(), ($thumb != null) ? $thumb->getUrl() : '',
-                    $criteria->getLanguage()
+                    $criteria->getLanguage(), $criteria->getRegionCode(), $criteria->getHD()
                 );
                 array_push($allVideos, $video);
             }
@@ -200,6 +200,8 @@ class YTVideo
     public $publishedAt;
     public $thumbUrl;
     public $language;
+    public $regionCode;
+    public $isHD;
     public $desktopUrl;
 
     // after resolveCaptions()
@@ -224,7 +226,7 @@ class YTVideo
     public $tags;
 
 
-    function __construct($videoId, $title, $description, $publishedAt, $thumbUrl, $language)
+    function __construct($videoId, $title, $description, $publishedAt, $thumbUrl, $language, $regionCode, $isHD)
     {
         $this->videoId = $videoId;
         $this->title = $title;
@@ -232,6 +234,8 @@ class YTVideo
         $this->publishedAt = $publishedAt;
         $this->thumbUrl = $thumbUrl;
         $this->language = $language;
+        $this->regionCode = $regionCode;
+        $this->isHD = $isHD;
         $this->desktopUrl = 'https://www.youtube.com/watch?v=' . $videoId;
     }
 
@@ -467,6 +471,8 @@ class YTVideo
             "publishedAt" => $this->publishedAt,
             "thumbUrl" => $this->thumbUrl,
             "language" => $this->language,
+            "regionCode" => $this->regionCode,
+            "isHD" => $this->isHD,
             "desktopUrl" => $this->desktopUrl,
 
             "countViews" => $this->countViews,
@@ -554,6 +560,8 @@ class YTSearchCriteria
     {
         $this->criteria['q'] = $query;
         $this->criteria['type'] = 'video';
+        // NOTE: this is a major reducer, even over yt captioned video searches (130->13!)
+        // could try with this off and see how many positives will be evicted later
         $this->criteria['videoCaption'] = 'closedCaption';
         $this->criteria['videoEmbeddable'] = 'true';
         $this->criteria['safeSearch'] = 'none';
@@ -653,5 +661,15 @@ class YTSearchCriteria
     function getLanguage()
     {
         return $this->criteria['relevanceLanguage'];
+    }
+
+    public function getRegionCode()
+    {
+        return $this->criteria['regionCode'];
+    }
+
+    public function getHD()
+    {
+        return isset($this->criteria['videoDefinition']) && $this->criteria['videoDefinition'] == "high";
     }
 }

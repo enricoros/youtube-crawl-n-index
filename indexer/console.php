@@ -1,3 +1,4 @@
+#!/usr/bin/env php
 <?php
 /* Copyright 2015, Enrico Ros
 
@@ -16,7 +17,11 @@ limitations under the License. */
 require_once 'jobs_interface.php';
 
 if (!isset($argv) || sizeof($argv) < 2)
-    die("We require at least one command line argument: add, status, clear.\n");
+    die("We require at least one command line argument:\n" .
+        "  add some_query   adds the query to the jobs schedule (e.g., literally: \"\\\"that's what she said\\\",cc\")\n" .
+        "  status           shows the status of the jobs\n" .
+        "  clear            resets the workers to 0 (but does NOT kill any running worker!)\n" .
+        "\n");
 
 // handle operations
 $count = sizeof($argv);
