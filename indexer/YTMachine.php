@@ -26,8 +26,8 @@ define('YT_MIN_VALID_LINES', 5);    // lines per CC
 class YTMachine
 {
     // cloud console data
-    private $oauth_email_file = __DIR__ . '/../../twhs-2040b1e37d61.email.txt';
-    private $oauth_P12_file = __DIR__ . '/../../twhs-2040b1e37d61.p12';
+    const OAUTH_EMAIL_FILE = '/../../twhs-2040b1e37d61.email.txt';
+    const OAUTH_P12_FILE = '/../../twhs-2040b1e37d61.p12';
 
     // list of permissions we need
     private $scopes = ['https://www.googleapis.com/auth/youtube.force-ssl'];
@@ -36,9 +36,9 @@ class YTMachine
     {
         self::$googleClient = new Google_Client();
         $credentials = new Google_Auth_AssertionCredentials(
-            trim(file_get_contents($this->oauth_email_file)),
+            trim(file_get_contents(__DIR__ . self::OAUTH_EMAIL_FILE),
             $this->scopes,
-            file_get_contents($this->oauth_P12_file)
+            file_get_contents(__DIR__ . self::OAUTH_P12_FILE)
         );
         self::$googleClient->setAssertionCredentials($credentials);
     }
