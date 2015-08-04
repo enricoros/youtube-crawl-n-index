@@ -22,6 +22,7 @@ if ($workingQuery == null)
 
 // configuration
 const VIDEOS_PER_QUERY = 100;
+const MIN_VIDEO_VIEWS = 2000;
 const FORCE_REINDEX = false;
 
 // create the global objects
@@ -81,6 +82,11 @@ do {
 
         // also resolve details: numbers of views, etc.
         $video->resolveDetails();
+        if ($video->countViews < MIN_VIDEO_VIEWS) {
+            echo 'V';
+            CacheMachine::storeValue($videoUsableKey, false, null);
+            continue;
+        }
 
         // send it to the Index (to be indexed)
         if (!$indexMachine->addOrUpdate($video->videoId, $video)) {
