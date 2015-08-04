@@ -22,7 +22,7 @@ define('IM_VERBOSE', true);
 class IndexMachine_Algolia implements IndexMachine
 {
     // cloud console data
-    const ALGOLIA_API_KEY = __DIR__ . '/../../twsh-algolia-apikey.txt';
+    const ALGOLIA_API_KEY_FILE = '/../../twsh-algolia-apikey.txt';
 
     private $client;
     private $index;
@@ -30,7 +30,7 @@ class IndexMachine_Algolia implements IndexMachine
     function __construct($indexName)
     {
         // create the client
-        $this->client = new \AlgoliaSearch\Client("2TRUTQVPX8", trim(file_get_contents(self::ALGOLIA_API_KEY)));
+        $this->client = new \AlgoliaSearch\Client("2TRUTQVPX8", trim(file_get_contents(__DIR__ . self::ALGOLIA_API_KEY)));
 
         // create or retrieve the index
         if (!isset($indexName) || empty($indexName))
