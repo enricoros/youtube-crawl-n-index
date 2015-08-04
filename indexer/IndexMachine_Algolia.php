@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+require_once __DIR__ . '/../vendor/autoload.php';
 require_once 'IndexMachine.php';
 
 define('IM_VIOLENT', true);

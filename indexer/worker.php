@@ -13,23 +13,24 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-// configuration
-const VIDEOS_PER_QUERY = 100;
-const FORCE_REINDEX = false;
+require_once 'jobs_interface.php';
 
 // quickly bail out if there is no job for me
-require_once 'jobs_interface.php';
 $workingQuery = work_getOneForMe();
 if ($workingQuery == null)
     die("no jobs for me\n");
 
-require_once __DIR__ . '/../vendor/autoload.php';
-require_once 'YTMachine.php';
-require_once 'IndexMachine_Algolia.php';
+// configuration
+const VIDEOS_PER_QUERY = 100;
+const FORCE_REINDEX = false;
 
 // create the global objects
+require_once 'YTMachine.php';
 $ytMachine = new \YTMachine();
+
+require_once 'IndexMachine_Algolia.php';
 $indexMachine = new \IndexMachine_Algolia(isset($_GET['index']) ? 'yt_' . $_GET['index'] : '');
+
 
 // loop until there's work
 do {

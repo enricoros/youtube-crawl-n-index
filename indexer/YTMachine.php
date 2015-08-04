@@ -13,6 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+require_once __DIR__ . '/../vendor/autoload.php';
+
 define('YT_VIOLENT', true);
 define('YT_VERBOSE', false);
 define('YT_LANG_FILTER', 'en');
