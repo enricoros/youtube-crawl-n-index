@@ -36,7 +36,7 @@ class YTMachine
     {
         self::$googleClient = new Google_Client();
         $credentials = new Google_Auth_AssertionCredentials(
-            trim(file_get_contents(__DIR__ . self::OAUTH_EMAIL_FILE),
+            trim(file_get_contents(__DIR__ . self::OAUTH_EMAIL_FILE)),
             $this->scopes,
             file_get_contents(__DIR__ . self::OAUTH_P12_FILE)
         );
