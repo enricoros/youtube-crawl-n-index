@@ -4,15 +4,15 @@ The purpose of the backend is to crawl for usable videos, download the subtitles
 all the information to the indexer (a web service). That's it.
 
 ## Frontend(s)
-There is a Web frontend to the backend [index.php](index.php), which generates some html
+There is a Web frontend to the backend [index.php], which generates some html
 that acts as a view/controller to the main crawling+indexing engine.
 
-There is a commandline frontend to the backend [crawl.php], which shows the status and
+There is a commandline frontend to the backend [console.php], which shows the status and
 allows to add things to be queried.
 
 ## Crawling + Downloading + Indexing
-The YouTube crawler + processor + Search indexer works by atomically de-queuing some work
-item and processing it. There can be more than one in parallel.
+The YouTube crawler + processor + Search indexer [worker.php] works by atomically de-queuing
+a work item (or 'query') and processing it. There can be more than one in parallel.
 
 ## Needs:
 This operation needs REDIS. Which is used for:

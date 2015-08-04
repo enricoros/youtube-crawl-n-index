@@ -21,7 +21,7 @@ define('IM_VERBOSE', true);
 class IndexMachine_Algolia implements IndexMachine
 {
     // cloud console data
-    const ALGOLIA_API_KEY = '../../twsh-algolia-apikey.txt';
+    const ALGOLIA_API_KEY = __DIR__ . '/../../twsh-algolia-apikey.txt';
 
     private $client;
     private $index;

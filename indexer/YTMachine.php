@@ -16,6 +16,7 @@ limitations under the License. */
 define('YT_VIOLENT', true);
 define('YT_VERBOSE', false);
 define('YT_LANG_FILTER', 'en');
+define('YT_REGION_FILTER', 'US');
 define('YT_MIN_VALID_CHARS', 4);    // chars per line
 define('YT_MIN_VALID_LINES', 5);    // lines per CC
 
@@ -23,8 +24,8 @@ define('YT_MIN_VALID_LINES', 5);    // lines per CC
 class YTMachine
 {
     // cloud console data
-    private $oauth_email_file = '../../twhs-2040b1e37d61.email.txt';
-    private $oauth_P12_file = '../../twhs-2040b1e37d61.p12';
+    private $oauth_email_file = __DIR__ . '/../../twhs-2040b1e37d61.email.txt';
+    private $oauth_P12_file = __DIR__ . '/../../twhs-2040b1e37d61.p12';
 
     // list of permissions we need
     private $scopes = ['https://www.googleapis.com/auth/youtube.force-ssl'];
@@ -554,23 +555,24 @@ class YTSearchCriteria
         $this->criteria['q'] = $query;
         $this->criteria['type'] = 'video';
         $this->criteria['videoCaption'] = 'closedCaption';
-        $this->criteria['safeSearch'] = 'none';
         $this->criteria['videoEmbeddable'] = 'true';
-        // both to be validated
-        $this->criteria['regionCode'] = 'US';
-        $this->criteria['paidContent'] = 'false';
-        $this->setLanguage(YT_LANG_FILTER);
+        $this->criteria['safeSearch'] = 'none';
+        // need something like this
+        //$this->criteria['paidContent'] = 'false';
+        $this->setLanguage(YT_LANG_FILTER, YT_REGION_FILTER);
         $this->setResultsPageSize(40);
         $this->setHD(true);
     }
 
     /**
      * @param $lang String from http://www.loc.gov/standards/iso639-2/php/code_list.php, e.g. 'en'
+     * @param $region String from "ISO 3166-1 alpha-2" codes
      * @return YTSearchCriteria
      */
-    function setLanguage($lang)
+    function setLanguage($lang, $region)
     {
         $this->criteria['relevanceLanguage'] = $lang;
+        $this->criteria['regionCode'] = $region;
         return $this;
     }
 

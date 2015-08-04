@@ -13,6 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+require_once __DIR__ . '/../vendor/autoload.php';
+
 class CacheMachine
 {
     /**
@@ -50,6 +52,17 @@ class CacheMachine
             return true;
         }
         return false;
+    }
+
+    /**
+     * @return \Predis\Client The Redis client, or null.
+     */
+    public static function getPRedisClientOrDie()
+    {
+        $redis = CacheMachine::getPRedisClient();
+        if ($redis == null)
+            die('redis is down');
+        return $redis;
     }
 
 
