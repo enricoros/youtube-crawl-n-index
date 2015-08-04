@@ -30,7 +30,7 @@ class IndexMachine_Algolia implements IndexMachine
     function __construct($indexName)
     {
         // create the client
-        $this->client = new \AlgoliaSearch\Client("2TRUTQVPX8", trim(file_get_contents(__DIR__ . self::ALGOLIA_API_KEY)));
+        $this->client = new \AlgoliaSearch\Client("2TRUTQVPX8", trim(file_get_contents(__DIR__ . self::ALGOLIA_API_KEY_FILE)));
 
         // create or retrieve the index
         if (!isset($indexName) || empty($indexName))
