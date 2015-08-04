@@ -1,13 +1,51 @@
-body {
-  line-height: 1.6em; }
-  body h3 {
-    background-color: #177fbe;
-    color: white;
-    padding: 12px;
-    margin: 0; }
-  body section {
-    padding: 0 12px; }
-    body section pre {
-      color: #177fbe; }
+.header {
+  background-color: #177fbe;
+  padding: 12px;
+  margin: 0; }
+  .header h3 {
+    color: white; }
+
+.refresh-button {
+  padding: 12px;
+  color: #116191;
+  cursor: pointer; }
+
+.w-active {
+  color: darkgreen;
+  font-weight: bold; }
+
+.w-inactive {
+  color: red;
+  font-size: 2em;
+  font-weight: bold; }
+
+.w-block {
+  width: 32px;
+  height: 32px;
+  background: #31a35f;
+  display: inline-block;
+  color: white;
+  text-align: center;
+  line-height: 32px; }
+
+.w-block.w-active {
+  background: #ae252f; }
+
+.queued-commands {
+  background: #f2f2f2; }
+  .queued-commands h5 {
+    color: darkgreen; }
+  .queued-commands ul {
+    font-size: 0.8em;
+    color: darkgreen; }
+
+.set-to-query {
+  cursor: pointer;
+  color: #116191;
+  font-style: normal; }
+
+.set-to-query:hover {
+  color: #177fbe;
+  text-decoration: underline; }
 
 /*# sourceMappingURL=app.css.map */

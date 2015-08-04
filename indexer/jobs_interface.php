@@ -45,8 +45,18 @@ function work_queueForWorkers($jobArray, $spawnWorkerProcess = true)
 
     // if requested start a worker
     if ($spawnWorkerProcess == true) {
+        // NOTE: for this to work, we also need permissions (to the web server user)
+        // to /tmp/index-workers* and /tmp/Google_Client, since another user may be
+        // owning them.
         // this just executes the worker.php script, which may eventually bail out immediately
-        $spawnCmd = '/usr/bin/php ' . __DIR__ . '/worker.php >> /tmp/index-workers.log 2>> /tmp/index-workers.err &';
+        $spawnCmd =
+            'nohup ' .                          // don't die when apache worker dies
+            '/usr/bin/php ' .                   // php executable
+            __DIR__ . '/worker.php ' .          // php script, in this current dir?
+            '>> /tmp/index-workers.log ' .      // append output to /tmp/index-workers.log
+            '2>> /tmp/index-workers.err ' .     // append error to /tmp/index-workers.err
+            '< /dev/null ' .                    // don't take input
+            '&';                                // run in background
         if (JOBS_SPAWN_WORKERS)
             exec($spawnCmd);
         else
@@ -109,7 +119,9 @@ function work_admin_getStats()
     return [
         'queued count' => $redis->llen(JOBS_QUEUE_NAME),
         'queued contents' => $redis->lrange(JOBS_QUEUE_NAME, 0, -1),
-        'workers' => $redis->get(JOBS_COUNT_NAME)
+        'workers active' => $redis->get(JOBS_COUNT_NAME),
+        'workers max' => JOBS_MAX_COUNT,
+        'workers enabled' => JOBS_SPAWN_WORKERS
     ];
 }
 

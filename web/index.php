@@ -12,67 +12,181 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
+
 require_once __DIR__ . '/../indexer/jobs_interface.php';
+
+// Special: Add To Workers: used by ajax to add a query to the workers
+if (isset($_GET['add_query'])) {
+    $query = $_GET['add_query'];
+    work_queueForWorkers([$query], true);
+    // the following content will be returned to the Ajax call
+    die('added.');
+}
+
+// Statistics
+$stats = work_admin_getStats();
+$queriesQueue = $stats['queued contents'];
+$activeWorkers = $stats['workers active'];
+$maxWorkers = $stats['workers max'];
+$online = $stats['workers enabled'];
+
+// to see all use '?raw'
+if (!isset($_GET['raw']) && !isset($_GET['xxx']))
+    unset($stats);
 ?>
 
 <!doctype html>
 <html>
 <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Feed the Trolls</title>
-    <link rel="stylesheet" href="css/app.css">
     <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/foundation.min.css">
+    <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<h3>Crawling + Indexing Control</h3>
+<div class="header">
+    <h3 class="row">Crawling + Indexing Control</h3>
+</div>
 
-<section>
-
-    <p>
-        This page will add new captioned videos to the overall index (if not already present).<br>
-        Enter a comma-separated list of query snippets below, and the corresponding videos will be
-        indexed in the minutes after.<br>
-        Each 'query' is searched 4 times, by 'relevance', 'viewCount', 'rating', and 'date'.<br>
-        Search is restricted to video that are: Close Captioned, HD, embeddable, 'en'glish,. Safesearch Off.<br>
-    </p>
-    
-    <form class="live-search" onsubmit="fullSearch(); return false;">
-        <div class="medium-9 columns">
-            <input type="text" name="query">
+<div class="row" style="margin-top: 1em;">
+    <!-- systems status panel -->
+    <div class="panel radius">
+        <div>Crowlers and Indexers are
+            <?php
+            if ($online)
+                echo "<span class='w-active'>enabled</span>. ";
+            else
+                echo "<span class='w-inactive'>DISABLED</span>. ";
+            echo ($activeWorkers < 1) ? "No busy workers: " : ($activeWorkers . " are busy: ");
+            echo "<&nbsp;";
+            for ($i = 0; $i < $maxWorkers; $i++) {
+                echo "<div class='w-block " . ($i < $activeWorkers ? "w-active" : "") . "'>" . ($i + 1) . "</div>&nbsp;";
+            }
+            echo ">";
+            ?>
+            <span class="refresh-button" onclick="location.reload(); return false;">refresh</span>
         </div>
-        <div class="medium-3 columns">
-            <input class="button" type="submit" value="Jam It Up">
+    </div>
+    <br>
+
+    <!-- Main Search Box -->
+    <div class="row">
+        <div class="medium-6 columns">
+            <input id="query-input" type="text" placeholder="Closed captions Query ...">
         </div>
-        <div class="medium-12 columns" style="margin-top: 0.5em">
-            <input type="checkbox" name="exact" id="chk-exact" checked="">
-            <label for="chk-exact">Exact match</label>
+        <div class="medium-6 columns">
+            <div id="index-button" class="button tiny round warning" onclick="addToIndex();">+Add to Crawling Queue
+            </div>
+            &nbsp;
+            <div class="button tiny round" onclick="tryYoutube();">Try on Youtube</div>
         </div>
-        <div id="go-container" class="medium-12 columns" style="margin-top: 0.5em; display: none">
-            <div class="button" onclick="playVideoReel()">GROOVE NEXT</div>
+        <div class="medium-12 columns">
+            Hint: to search within the close captions and index those videos use
+            <i class="set-to-query">"text to search...",cc</i>.
         </div>
-    </form>
+    </div>
+    <br>
 
-    <form method="GET" >
-        <input type="text" id="queryText" name="queryText"
-               placeholder="search videos..." <?php if (isset($_GET['queryText'])) echo 'value="' . $_GET['queryText'] . '"'; ?>>
-        <input type="submit" value="GO!">
-    </form>
-    <ul>
-        <li>cult movies, tv shows, youtube channels, cartoons, memes</li>
-        <li>science, technology, entertainment, funny, futuristic, chemistry, physics</li>
-        <li>Steve Jobs, Obama ,Elon Musk, Donald Trump, PewDiePie</li>
-        <li>570 wifi base stations</li>
-        <li>you are going to fail</li>
-        <li>...</li>
-    </ul>
+    <?php if (!empty($queriesQueue)) { ?>
+        <div class="queued-commands">
+            <h5>In the queue (<?= $activeWorkers ?> more are being processed)</h5>
+            <ul>
+                <?php foreach ($queriesQueue as $queuedQuery)
+                    echo "<li>" . $queuedQuery . "</li>\n";
+                ?>
+            </ul>
+        </div>
+    <?php } ?>
+    <br>
 
+    <!-- unneeded 'what we need to add' section -->
+    <div class="row">
+        <div class="medium-6 columns">
+            <h5>What we need to add:</h5>
+            <ul>
+                <li>
+                    <i class="set-to-query">cult movies</i>, <i class="set-to-query">tv shows</i>,
+                    <i class="set-to-query">youtube channels</i>, <i class="set-to-query">cartoons</i>,
+                    <i class="set-to-query">memes</i>
+                </li>
+                <li>
+                    <i class="set-to-query">science</i>, <i class="set-to-query">technology</i>,
+                    <i class="set-to-query">entertainment</i>, <i class="set-to-query">funny</i>,
+                    <i class="set-to-query">futuristic</i>
+                </li>
+                <li>
+                    <i class="set-to-query">Steve Jobs</i>, <i class="set-to-query">Obama</i>,
+                    <i class="set-to-query">Elon Musk</i>, <i class="set-to-query">Donald Trump</i>,
+                    <i class="set-to-query">PewDiePie</i>
+                </li>
+            </ul>
+        </div>
+        <div class="medium-6 columns">
+            <h5>To remember:</h5>
+            <ul>
+                <li>570 wifi base stations</li>
+                <li>you are going to fail</li>
+            </ul>
+        </div>
+    </div>
 
-    <pre>
-<?php
+    <!-- footer -->
+    <div style="color: #888">
+        Each query is searched 4 times by { relevance, viewCount, rating, and date }.<br>
+        Search is restricted to videos that are: { close captioned, HD, embeddable, in english }.<br>
+        Safe-search is off.
+    </div>
+    <br>
 
+    <?php if (isset($stats)) {?>
+        <pre class='panel'><?php print_r($stats);?></pre>
+    <?php }?>
+</div>
 
-?>
-    </pre>
-</section>
+<script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
+<script>
+    var $queryInput = $('#query-input');
+    var $indexButton = $('#index-button');
+
+    function addToIndex() {
+        var query = $queryInput.val();
+        if (query.length > 1) {
+            var url = 'index.php?add_query=' + encodeURI(query);
+            $.ajax(url)
+                .done(function () {
+                    setTimeout(function () {
+                        location.reload();
+                    }, 200);
+                })
+                .fail(function (xhr, status, msg) {
+                    alert(status + ": can't add to the index: " + msg);
+                });
+        }
+    }
+
+    // enter on query to add to index
+    $queryInput.keyup(function (event) {
+        if (event.keyCode == 13)
+            $indexButton.click();
+    });
+
+    // automatic set to query on .set-to-query elements
+    $('.set-to-query').click(function () {
+        $queryInput.val($(this).text());
+    });
+
+    function tryYoutube() {
+        var query = $queryInput.val();
+        if (query.length > 1) {
+            // open the new window
+            var url = 'https://www.youtube.com/results?search_query=' + encodeURI(query);
+            var win = window.open(url, '_blank');
+            win.focus();
+        }
+    }
+</script>
 
 </body>
 </html>

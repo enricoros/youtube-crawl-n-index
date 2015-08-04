@@ -1,15 +1,66 @@
-body {
-  line-height: 1.6em;
+$favoriteColor: #177fbe;
+$systemsOkColor: darkgreen;
+
+.header {
+  background-color: $favoriteColor;
+  padding: 12px;
+  margin: 0;
   h3 {
-    background-color: #177fbe;
     color: white;
-    padding: 12px;
-    margin: 0;
-  }
-  section {
-    padding: 0 12px;
-    pre {
-      color: #177fbe;
-    }
   }
 }
+
+.refresh-button {
+  padding: 12px;
+  color: darken($favoriteColor, 10);
+  cursor: pointer;
+}
+
+.w-active {
+  color: $systemsOkColor;
+  font-weight: bold;
+}
+
+.w-inactive {
+  color: red;
+  font-size: 2em;
+  font-weight: bold;
+}
+
+$blockSize: 32px;
+.w-block {
+  width: $blockSize;
+  height: $blockSize;
+  background: #31a35f;
+  display: inline-block;
+  color: white;
+  text-align: center;
+  line-height: $blockSize;
+}
+
+.w-block.w-active {
+  background: #ae252f;
+}
+
+.queued-commands {
+  background: #f2f2f2;
+  h5 {
+    color: $systemsOkColor;
+  }
+  ul {
+    font-size: 0.8em;
+    color: $systemsOkColor
+  }
+}
+
+.set-to-query {
+  cursor: pointer;
+  color: darken($favoriteColor, 10);
+  font-style: normal;
+}
+
+.set-to-query:hover {
+  color: $favoriteColor;
+  text-decoration: underline;
+}
+
