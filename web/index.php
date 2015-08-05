@@ -29,9 +29,12 @@ $queriesQueue = $stats['queued contents'];
 $activeWorkers = $stats['workers active'];
 $maxWorkers = $stats['workers max'];
 $online = $stats['workers enabled'];
+$jobsExecuted = $stats['jobs executed'];
+$recentQueue = $stats['recent contents'];
 
 // to see all use '?raw'
-if (!isset($_GET['raw']) && !isset($_GET['xxx']))
+$isAdmin = isset($_GET['raw']) || isset($_GET['xxx']);
+if (!$isAdmin)
     unset($stats);
 ?>
 
@@ -64,7 +67,7 @@ if (!isset($_GET['raw']) && !isset($_GET['xxx']))
             for ($i = 0; $i < $maxWorkers; $i++) {
                 echo "<div class='w-block " . ($i < $activeWorkers ? "w-active" : "") . "'>" . ($i + 1) . "</div>&nbsp;";
             }
-            echo ">";
+            echo ">. " . $jobsExecuted . " crawlings.\n";
             ?>
             <span class="refresh-button" onclick="location.reload(); return false;">refresh</span>
         </div>
@@ -95,6 +98,16 @@ if (!isset($_GET['raw']) && !isset($_GET['xxx']))
             <ul>
                 <?php foreach ($queriesQueue as $queuedQuery)
                     echo "<li class='set-to-query'>" . $queuedQuery . "</li>\n";
+                ?>
+            </ul>
+        </div>
+    <?php } ?>
+    <?php if (!empty($recentQueue) && $isAdmin) { ?>
+        <div class="queued-commands">
+            <h5>Recent queries (executing or done)</h5>
+            <ul>
+                <?php foreach ($recentQueue as $recentQuery)
+                    echo "<li class='set-to-query'>" . $recentQuery . "</li>\n";
                 ?>
             </ul>
         </div>

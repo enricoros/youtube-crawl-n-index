@@ -17,6 +17,9 @@ require_once 'CacheMachine.php';
 
 define('JOBS_VIOLENT', true);
 define('JOBS_SPAWN_WORKERS', true);
+define('JOBS_DONE_SET_NAME', 'jobs_done');
+define('JOBS_RECENT_NAME', 'jobs_recent');
+define('JOBS_RECENT_SIZE', 10);
 define('JOBS_QUEUE_NAME', 'twhs_jobs');
 define('JOBS_COUNT_NAME', 'twhs_workers_count');
 define('JOBS_MAX_COUNT', 4);
@@ -83,8 +86,15 @@ function work_getOneForMe()
     if ($newCount <= JOBS_MAX_COUNT) {
         // if we can, get the job and leave the state as 'incremented'
         $job = $redis->lpop(JOBS_QUEUE_NAME);
-        if ($job != null)
+        if ($job != null) {
+            // also save it to the recent pipe for inspection
+            $redis->lpush(JOBS_RECENT_NAME, $job);
+            $redis->ltrim(JOBS_RECENT_NAME, 0, JOBS_RECENT_SIZE - 1);
+            // also save it to the global set of queries
+            $redis->sadd(JOBS_DONE_SET_NAME, [ $job ]);
+            // and yes, return the job to be executed :)
             return $job;
+        }
     }
 
     // if no job, or no slots.. consider it done :)
@@ -117,11 +127,12 @@ function work_admin_getStats()
     // get redis
     $redis = CacheMachine::getPRedisClientOrDie();
     return [
-        'queued count' => $redis->llen(JOBS_QUEUE_NAME),
         'queued contents' => $redis->lrange(JOBS_QUEUE_NAME, 0, -1),
         'workers active' => $redis->get(JOBS_COUNT_NAME),
         'workers max' => JOBS_MAX_COUNT,
-        'workers enabled' => JOBS_SPAWN_WORKERS
+        'workers enabled' => JOBS_SPAWN_WORKERS,
+        'jobs executed' => $redis->scard(JOBS_DONE_SET_NAME),
+        'recent contents' => $redis->lrange(JOBS_RECENT_NAME, 0, -1)
     ];
 }
 
