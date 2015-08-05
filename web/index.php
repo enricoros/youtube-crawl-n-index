@@ -94,7 +94,7 @@ if (!isset($_GET['raw']) && !isset($_GET['xxx']))
             <h5>In the queue (<?= $activeWorkers ?> more are being processed)</h5>
             <ul>
                 <?php foreach ($queriesQueue as $queuedQuery)
-                    echo "<li>" . $queuedQuery . "</li>\n";
+                    echo "<li class='set-to-query'>" . $queuedQuery . "</li>\n";
                 ?>
             </ul>
         </div>
@@ -176,6 +176,11 @@ if (!isset($_GET['raw']) && !isset($_GET['xxx']))
     $('.set-to-query').click(function () {
         $queryInput.val($(this).text());
     });
+
+    // try to focus the search box asap
+    setTimeout(function() {
+        $queryInput.focus();
+    }, 100);
 
     function tryYoutube() {
         var query = $queryInput.val();

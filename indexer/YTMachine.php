@@ -20,6 +20,8 @@ define('YT_VERBOSE', false);
 define('YT_LANG_FILTER', 'en');
 define('YT_REGION_FILTER', 'US');
 define('YT_MIN_VALID_CHARS', 4);    // chars per line
+define('YT_MAX_VALID_CHARS', 400);  // chars per line
+define('YT_MAX_VALID_DURATION', 20);// seconds
 define('YT_MIN_VALID_LINES', 5);    // lines per CC
 
 
@@ -411,7 +413,7 @@ class YTVideo
                 // skip lines with less than YT_MIN_VALID_CHARS chars
                 $text = $this->fixSrv1Caption(strval($line));
                 $textLength = strlen($text);
-                if ($textLength < YT_MIN_VALID_CHARS)
+                if ($textLength < YT_MIN_VALID_CHARS || $textLength > YT_MAX_VALID_CHARS)
                     continue;
                 if ($textLength > $maxLength)
                     $maxLength = $textLength;
@@ -423,6 +425,11 @@ class YTVideo
                 if (empty($start) || empty($duration)) {
                     if (YT_VERBOSE)
                         echo 'skipping for start or duration empty on ' . $ccVideoId . " body: " . $ccString . "\n";
+                    continue;
+                }
+                if (floatval($duration) > YT_MAX_VALID_DURATION) {
+                    if (YT_VERBOSE)
+                        echo 'skipping line for length (>20s or >1000 cars) ' . $ccVideoId . "\n";
                     continue;
                 }
 
