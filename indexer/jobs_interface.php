@@ -131,7 +131,7 @@ function work_admin_getStats()
         'workers active' => $redis->get(JOBS_COUNT_NAME),
         'workers max' => JOBS_MAX_COUNT,
         'workers enabled' => JOBS_SPAWN_WORKERS,
-        'jobs executed' => $redis->scard(JOBS_DONE_SET_NAME),
+        'unique queries' => $redis->scard(JOBS_DONE_SET_NAME),
         'recent contents' => $redis->lrange(JOBS_RECENT_NAME, 0, -1)
     ];
 }

@@ -37,7 +37,11 @@
     color: darkgreen; }
   .queued-commands ul {
     font-size: 0.8em;
-    color: darkgreen; }
+    color: darkgreen;
+    -webkit-column-count:2; -webkit-column-gap:20px;
+    -moz-column-count:2; -moz-column-gap:20px;
+    -o-column-count:2; -o-column-gap:20px;
+    column-count:2; column-gap:20px; }
 
 .set-to-query {
   cursor: pointer;

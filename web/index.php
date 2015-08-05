@@ -33,7 +33,7 @@ $queriesQueue = $stats['queued contents'];
 $activeWorkers = $stats['workers active'];
 $maxWorkers = $stats['workers max'];
 $online = $stats['workers enabled'];
-$jobsExecuted = $stats['jobs executed'];
+$uniqueQueries = $stats['unique queries'];
 $recentQueue = $stats['recent contents'];
 
 // to see all use '?raw'
@@ -108,7 +108,7 @@ if (!$isAdmin)
     <?php } ?>
     <?php if (!empty($recentQueue) && $isAdmin) { ?>
         <div class="queued-commands">
-            <h5>Recent queries (executing or done)</h5>
+            <h5>Recent queries (executing or done) [<?=$uniqueQueries?> global unique]:</h5>
             <ul>
                 <?php foreach ($recentQueue as $recentQuery)
                     echo "<li class='set-to-query'>" . $recentQuery . "</li>\n";
