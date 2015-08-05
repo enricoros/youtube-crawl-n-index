@@ -15,13 +15,17 @@ limitations under the License. */
 
 require_once __DIR__ . '/../indexer/jobs_interface.php';
 
+define('METHOD_ADD_QUERY', 'add_query');
+define('METHOD_SET_INPUT', 'queryText');
+
 // Special: Add To Workers: used by ajax to add a query to the workers
-if (isset($_GET['add_query'])) {
-    $query = $_GET['add_query'];
+if (isset($_GET[METHOD_ADD_QUERY])) {
+    $query = $_GET[METHOD_ADD_QUERY];
     work_queueForWorkers([$query], true);
     // the following content will be returned to the Ajax call
     die('added.');
 }
+$startInputValue = isset($_GET[METHOD_SET_INPUT]) ? $_GET[METHOD_SET_INPUT] : '';
 
 // Statistics
 $stats = work_admin_getStats();
@@ -56,7 +60,7 @@ if (!$isAdmin)
 <div class="row" style="margin-top: 1em;">
     <!-- systems status panel -->
     <div class="panel radius">
-        <div>Crowlers and Indexers are
+        <div>Crawlers and Indexers are
             <?php
             if ($online)
                 echo "<span class='w-active'>enabled</span>. ";
@@ -67,7 +71,7 @@ if (!$isAdmin)
             for ($i = 0; $i < $maxWorkers; $i++) {
                 echo "<div class='w-block " . ($i < $activeWorkers ? "w-active" : "") . "'>" . ($i + 1) . "</div>&nbsp;";
             }
-            echo ">. " . $jobsExecuted . " crawlings.\n";
+            echo ">.\n";
             ?>
             <span class="refresh-button" onclick="location.reload(); return false;">refresh</span>
         </div>
@@ -77,7 +81,7 @@ if (!$isAdmin)
     <!-- Main Search Box -->
     <div class="row">
         <div class="medium-6 columns">
-            <input id="query-input" type="text" placeholder="Closed captions Query ...">
+            <input id="query-input" type="text" placeholder="Closed captions Query ..." value="<?=$startInputValue?>">
         </div>
         <div class="medium-6 columns">
             <div id="index-button" class="button tiny round warning" onclick="addToIndex();">+Add to Crawling Queue
@@ -166,7 +170,7 @@ if (!$isAdmin)
     function addToIndex() {
         var query = $queryInput.val();
         if (query.length > 1) {
-            var url = 'index.php?add_query=' + encodeURI(query);
+            var url = 'index.php?<?=METHOD_ADD_QUERY?>=' + encodeURI(query);
             $.ajax(url)
                 .done(function () {
                     setTimeout(function () {
