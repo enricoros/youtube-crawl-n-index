@@ -28,6 +28,17 @@ class CacheMachine
     }
 
     /**
+     * @param $key String The name of the set
+     * @param $member String The member to loop for
+     * @return bool true if the key exists (and redis is up)
+     */
+    public static function setContains($key, $member)
+    {
+        $client = self::getPRedisClient();
+        return $client != null && $client->sismember($key, $member) == 1;
+    }
+
+    /**
      * @param $key String
      * @return null|string
      */
@@ -52,6 +63,16 @@ class CacheMachine
             return true;
         }
         return false;
+    }
+
+    /**
+     * @param $key String The name of the set.
+     * @param $member String A single element to add
+     * @return bool True if the element was added, false if already present.
+     */
+    public static function addToSet($key, $member) {
+        $client = self::getPRedisClient();
+        return $client != null && $client->sadd($key, [ $member ]) > 0;
     }
 
     /**

@@ -24,6 +24,8 @@ if ($workingQuery == null)
 const VIDEOS_PER_QUERY = 100;
 const MIN_VIDEO_VIEWS = 2000;
 const FORCE_REINDEX = false;
+define('VIDEOS_PROCESSED_SET', 'videos_processed');
+define('VIDEOS_INDEXED_SET_NAME', 'videos_indexed');
 
 // create the global objects
 require_once 'YTMachine.php';
@@ -67,16 +69,15 @@ do {
     foreach ($videoLeads as $video) {
         // OPTIMIZATION: skip resolving if we already did it in the past and
         // the video has already been indexed (or we know it can't be).
-        $videoUsableKey = 'use_' . $video->videoId;
-        if (!FORCE_REINDEX && CacheMachine::hasKey($videoUsableKey)) {
+        if (!FORCE_REINDEX && CacheMachine::setContains(VIDEOS_PROCESSED_SET, $video->videoId)) {
             echo ' ';
             continue;
         }
+        CacheMachine::addToSet(VIDEOS_PROCESSED_SET, $video->videoId);
 
         // resolve the captions, and skip if failed
         if (!$video->resolveCaptions()) {
             echo 'C';
-            CacheMachine::storeValue($videoUsableKey, false, null);
             continue;
         }
 
@@ -84,20 +85,18 @@ do {
         $video->resolveDetails();
         if ($video->countViews < MIN_VIDEO_VIEWS) {
             echo 'V';
-            CacheMachine::storeValue($videoUsableKey, false, null);
             continue;
         }
 
         // send it to the Index (to be indexed)
         if (!$indexMachine->addOrUpdate($video->videoId, $video)) {
             echo 'S';
-            CacheMachine::storeValue($videoUsableKey, false, null);
             continue;
         }
 
         // video processed, all details are present, subtitles downloaded and indexed
         array_push($newVideos, $video);
-        CacheMachine::storeValue($videoUsableKey, true, null);
+        CacheMachine::addToSet(VIDEOS_INDEXED_SET_NAME, $video->videoId);
         echo '.';
     }
     echo "]\n";
