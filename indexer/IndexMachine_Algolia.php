@@ -57,27 +57,39 @@ class IndexMachine_Algolia implements IndexMachine
         return $res['objectID'] == $objectID;
     }
 
+    /**
+     * Temporary, until we encapsulate the operations
+     */
+    public function getIndex()
+    {
+        return $this->index;
+    }
+
+
     /// private stuff ahead ///
 
     private function updateIndexAndSearchSettings()
     {
         // set our default settings - leave some things changeable from the console
         $this->index->setSettings(array(
-            "attributesToIndex" => [ "unordered(text.t)" /*, "tags", "description", "title"*/ ],
+            "attributesToIndex" => [
+                "unordered(text.t)",    // the main, all the lyrics are in here
+                "unordered(channelId)", // secondary, just for channel searches, but excluded by default
+            ],
 //            "customRanking" => [ "desc(pct_comments)", "desc(countViews)" ],
 //            "customRanking" => [ "desc(countViews)", "desc(pct_comments)" ],
             "unretrievableAttributes" => [],
-            "attributesForFaceting" => [ "_tags" ],
+            "attributesForFaceting" => ["_tags"],
             "highlightPreTag" => "<em>",
             "highlightPostTag" => "</em>"
         ));
     }
 
-    public function echoIndexSettings()
+    /*public function echoIndexSettings()
     {
         echo "<pre>";
         print_r($this->index->getSettings());
         echo "</pre>\n";
-    }
+    }*/
 
 }
