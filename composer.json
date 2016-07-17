@@ -3,8 +3,8 @@
     "description": "That's what he said!",
     "license": "Apache-2.0",
     "require": {
-        "google/apiclient": "^1.1",
-        "guzzlehttp/guzzle": "~6.0",
+        "google/apiclient": "~2.0",
+        "guzzlehttp/guzzle": "~6.2",
         "predis/predis": "1.0.x-dev",
         "elasticsearch/elasticsearch": "~2.0",
         "algolia/algoliasearch-client-php": "1.6.0"
