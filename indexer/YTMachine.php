@@ -319,7 +319,7 @@ class YTVideo
             $ccStatus = $cc->getStatus();
             if ($ccStatus != 'serving')
                 if (YT_VIOLENT)
-                    die('wrong status. expected serving, got ' . $ccStatus);
+                    die('wrong status. expected serving, got "' . $ccStatus . '"');
 
             // base fetching query
             $fetchQuery = 'v=' . $ccVideoId;

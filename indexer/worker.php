@@ -24,8 +24,8 @@ if ($workingQuery == null)
 const VIDEOS_PER_QUERY = 100;
 const MIN_VIDEO_VIEWS = 2000;
 const FORCE_REINDEX = false;
-define('VIDEOS_PROCESSED_SET', 'videos_processed');
-define('VIDEOS_INDEXED_SET_NAME', 'videos_indexed');
+define('VIDEOS_PROCESSED_SET', 'jam_videos_processed');
+define('VIDEOS_INDEXED_SET_NAME', 'jam_videos_indexed');
 
 // create the global objects
 require_once 'YTMachine.php';
