@@ -6,7 +6,7 @@
         "google/apiclient": "^1.1",
         "guzzlehttp/guzzle": "~6.0",
         "predis/predis": "1.0.x-dev",
-        "elasticsearch/elasticsearch": "v1.3.4",
+        "elasticsearch/elasticsearch": "~2.0",
         "algolia/algoliasearch-client-php": "1.6.0"
     },
     "authors": [
