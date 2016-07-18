@@ -107,7 +107,27 @@ class IndexMachine_ElasticSearch implements IndexMachine
     }
   }
 }
-        */
+
+{
+  "_source": [
+    "content",
+    "channel",
+    "stats"
+  ],
+  "query": {
+    "nested": {
+      "path": "cc.text",
+      "score_mode": "avg",
+      "query": {
+        "match_phrase": {
+          "cc.text.t": "i love you back"
+        }
+      },
+      "inner_hits": {}
+    }
+  }
+}
+            */
     }
 
     private function createIndex()

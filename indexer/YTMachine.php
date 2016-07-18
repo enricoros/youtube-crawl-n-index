@@ -443,13 +443,16 @@ class YTVideo
             $lines = [];
             $maxLength = 0;
             foreach ($ccTranscript->text AS $line) {
-                // skip lines with less than YT_MIN_VALID_CHARS chars
                 $text = $this->fixSrv1Caption(strval($line));
+
+                // fix quoted strings
+                if (strlen($text) > YT_MIN_VALID_CHARS && substr($text, 0, 1) == '"' && substr($text, -1) == '"')
+                    $text = substr($text, 1, -1);
+
+                // skip lines with less than YT_MIN_VALID_CHARS chars
                 $textLength = strlen($text);
                 if ($textLength < YT_MIN_VALID_CHARS || $textLength > YT_MAX_VALID_CHARS)
                     continue;
-                if ($textLength > $maxLength)
-                    $maxLength = $textLength;
 
                 // FILTER: videos that have start but not duration are usually 1-liners
                 $attributes = $line->attributes();
@@ -457,22 +460,31 @@ class YTVideo
                 $duration = $attributes['dur'];
                 if (empty($start) || empty($duration)) {
                     if (YT_VERBOSE)
-                        echo 'skipping for start or duration empty on ' . $ccVideoId . " body: " . $ccString . "\n";
+                        echo 'skipping cc line for start or duration empty on ' . $ccVideoId . " body: " . $ccString . "\n";
                     continue;
                 }
                 if (floatval($duration) > YT_MAX_VALID_DURATION) {
                     if (YT_VERBOSE)
-                        echo 'skipping line for length (>20s or >1000 cars) ' . $ccVideoId . "\n";
+                        echo 'skipping cc line for duration ' . $ccVideoId . "\n";
+                    continue;
+                }
+                // skip "( ... )" strings, since parenthesis are not real speech
+                if (substr($text, 0, 1) == '(' && substr($text, -1) == ')') {
+                    if (YT_VERBOSE)
+                        echo 'skipping cc line for (parenthesis) ' . $ccVideoId . "\n";
                     continue;
                 }
 
                 // add the line
                 array_push($lines, [
-                    "t" => $text,
-                    "s" => floatval($start),
-                    "d" => floatval($duration),
-                    "e" => floatval($start) + floatval($duration)
+                    't' => $text,
+                    //'tr' => $text,
+                    's' => floatval($start),
+                    'd' => floatval($duration),
+                    'e' => floatval($start) + floatval($duration)
                 ]);
+                if ($textLength > $maxLength)
+                    $maxLength = $textLength;
             }
 
             // FILTER: almost-empty docs, or docs with at most 3 letters per line

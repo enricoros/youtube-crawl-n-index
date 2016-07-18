@@ -10,6 +10,7 @@ folder to understand more of the architecture.
 To deploy, you need:
  * php with the curl extension
  * redis
+ * an accessible Elasticsearch instance
  * a valid API security for Algolia (the current indexing service), and editing the corresponding PHP file
  * to serve the indexer/ folder with Apache, or you can use the commandline executable to start indexing and check the status
 
