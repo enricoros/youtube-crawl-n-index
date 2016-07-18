@@ -30,19 +30,16 @@ class YTMachine
     // cloud console data
     const OAUTH_EMAIL_FILE = '/../../crawler-key-gapi.email.txt';
     const OAUTH_P12_FILE = '/../../crawler-key-gapi.p12';
+    const SERVICE_ACCOUNT_OAUTH_FILE = '/../../crawler-key-gapi.json';
 
     // list of permissions we need
-    private $scopes = ['https://www.googleapis.com/auth/youtube.force-ssl'];
+    private $scopes = [Google_Service_YouTube::YOUTUBE_FORCE_SSL];
 
     function __construct()
     {
         self::$googleClient = new Google_Client();
-        $credentials = new Google_Auth_AssertionCredentials(
-            trim(file_get_contents(__DIR__ . self::OAUTH_EMAIL_FILE)),
-            $this->scopes,
-            file_get_contents(__DIR__ . self::OAUTH_P12_FILE)
-        );
-        self::$googleClient->setAssertionCredentials($credentials);
+        self::$googleClient->setScopes($this->scopes);
+        self::$googleClient->setAuthConfig(__DIR__ . self::SERVICE_ACCOUNT_OAUTH_FILE);
     }
 
     /**
@@ -186,8 +183,8 @@ class YTMachine
 
     private static function ensureOAuthenticated()
     {
-        if (self::$googleClient->getAuth()->isAccessTokenExpired())
-            self::$googleClient->getAuth()->refreshTokenWithAssertion();
+        if (self::$googleClient->isAccessTokenExpired())
+            self::$googleClient->useApplicationDefaultCredentials();
     }
 }
 
@@ -210,11 +207,13 @@ class YTVideo
 
     // after resolveCaptions()
     private $resolvedCaptions = false;
+    private $lastResolveCaptionsIssue;
     /* @var $ytCC YTCC */
     public $ytCC = null;
 
     // after resolveDetails()
     private $resolvedDetails = false;
+    private $lastResolveDetailsIssue;
     public $countViews;
     public $countComments;
     public $countLikes;
@@ -249,6 +248,7 @@ class YTVideo
         if ($this->resolvedDetails)
             return;
         $this->resolvedDetails = true;
+        $this->lastResolveDetailsIssue = '';
 
         /* @var $item Google_Service_YouTube_Video
          * @var $snip Google_Service_YouTube_VideoSnippet
@@ -295,6 +295,7 @@ class YTVideo
         if ($this->resolvedCaptions)
             return $this->ytCC != null;
         $this->resolvedCaptions = true;
+        $this->lastResolveCaptionsIssue = '';
 
         // perform the resolution
         // FIXME: SPEED BOTTLENECK (1/second)
@@ -303,6 +304,7 @@ class YTVideo
         // get all the SRT from this track that match the language
         $ytCCs = [];
         foreach ($captionsList->getItems() as $item) {
+            /* @var $item Google_Service_YouTube_Caption */
             /* @var $cc Google_Service_YouTube_CaptionSnippet */
             $cc = $item->getSnippet();
             $ccId = $item->getId();
@@ -312,14 +314,22 @@ class YTVideo
             if ($ccVideoId != $this->videoId) {
                 if (YT_VIOLENT)
                     die('wrong video id, got ' . $ccVideoId . ' expecting ' . $this->videoId);
+                $this->lastResolveCaptionsIssue .= ' i';
                 continue;
             }
 
             // Sanity: check constant attributes, or stop if unexpected
             $ccStatus = $cc->getStatus();
-            if ($ccStatus != 'serving')
-                if (YT_VIOLENT)
-                    die('wrong status. expected serving, got "' . $ccStatus . '"');
+            if ($ccStatus != 'serving') {
+                if (YT_VERBOSE) {
+                    echo('{wrong cc status: ' . $ccStatus);
+                    if ($ccStatus == 'failure')
+                        echo('(' . $cc->getFailureReason() . ')');
+                    echo('}');
+                }
+                $this->lastResolveCaptionsIssue .= ' s';
+                continue;
+            }
 
             // base fetching query
             $fetchQuery = 'v=' . $ccVideoId;
@@ -332,10 +342,12 @@ class YTVideo
                 // FILTER: TODO: we don't support the ASR format yet, at all. Always fails.
                 if (YT_VERBOSE)
                     echo $ccVideoId . ',  skipping ASR tracks (unsupported yet)' . "\n";
+                $this->lastResolveCaptionsIssue .= ' k-asr';
                 continue;
             } else {
                 if (YT_VIOLENT)
                     die('unknown track type ' . $ccKind);
+                $this->lastResolveCaptionsIssue .= ' k-' . $ccKind;
                 continue;
             }
 
@@ -347,6 +359,7 @@ class YTVideo
                     // NOTE: in the future we could also stash other languages for later
                     if (YT_VERBOSE)
                         echo $ccVideoId . ',  skipping CC for different language: ' . $ccLang . "\n";
+                    $this->lastResolveCaptionsIssue .= ' l-' . $ccLang;
                     continue;
                 }
                 $fetchQuery .= '&lang=' . $ccLang;
@@ -377,6 +390,7 @@ class YTVideo
                     if ($response->getStatusCode() != 200) {
                         if (YT_VIOLENT)
                             die('wrong status code ' . $response->getStatusCode() . ' on ' . $fetchQuery);
+                        $this->lastResolveCaptionsIssue .= ' h1-' . $response->getStatusCode();
                         continue;
                     }
                     $ccString = $response->getBody()->getContents();
@@ -384,6 +398,7 @@ class YTVideo
                 } catch (\GuzzleHttp\Exception\ClientException $exception) {
                     if (YT_VIOLENT)
                         die('HTTP request failed: ' . $exception);
+                    $this->lastResolveCaptionsIssue .= ' h2-"' . $exception->getMessage() . '"';
                     continue;
                 }
             }
@@ -393,6 +408,7 @@ class YTVideo
             if ($ccStringSize < self::SUB_OK_THRESHOLD) {
                 if (YT_VERBOSE)
                     echo $ccVideoId . ',  skipping for small size: ' . $ccStringSize . "\n";
+                $this->lastResolveCaptionsIssue .= ' S-' . $ccStringSize;
                 continue;
             }
 
@@ -404,9 +420,11 @@ class YTVideo
             } catch (Exception $e) {
                 if (YT_VERBOSE)
                     echo 'skipping for xml parsing error' . $ccVideoId . "\n";
+                $this->lastResolveCaptionsIssue .= ' x';
                 continue;
             }
 
+            // Break a SRT into individual Lines
             $lines = [];
             $maxLength = 0;
             foreach ($ccTranscript->text AS $line) {
@@ -446,6 +464,7 @@ class YTVideo
             if ($maxLength < YT_MIN_VALID_CHARS || sizeof($lines) < YT_MIN_VALID_LINES) {
                 if (YT_VERBOSE)
                     echo 'skipping for emptiness  ' . sizeof($lines) . " lines and " . $maxLength . " max chars per line\n";
+                $this->lastResolveCaptionsIssue .= ' e';
                 continue;
             }
 
@@ -463,6 +482,13 @@ class YTVideo
         // pick the best (if any), or null
         $this->ytCC = empty($ytCCs) ? null : $ytCCs[0];
         return $this->ytCC != null;
+    }
+
+    /**
+     * @return string The shortcode reason for the failure
+     */
+    public function getLastCaptionIssue() {
+        return $this->lastResolveCaptionsIssue;
     }
 
     /**

@@ -77,20 +77,20 @@ do {
 
         // resolve the captions, and skip if failed
         if (!$video->resolveCaptions()) {
-            echo 'C';
+            echo 'C(' . ltrim($video->getLastCaptionIssue(), ' ') . ')';
             continue;
         }
 
         // also resolve details: numbers of views, etc.
         $video->resolveDetails();
         if ($video->countViews < MIN_VIDEO_VIEWS) {
-            echo 'V';
+            echo 'D(v-' . $video->countViews . ')';
             continue;
         }
 
         // send it to the Index (to be indexed)
         if (!$indexMachine->addOrUpdate($video->videoId, $video)) {
-            echo 'S';
+            echo 'I';
             continue;
         }
 
@@ -100,7 +100,7 @@ do {
         echo '.';
     }
     echo "]\n";
-    echo $outPrefix . sizeof($newVideos) . " indexed\n";
+    echo $outPrefix . sizeof($newVideos) . " added to the index\n";
 
     // done
     work_doneWithMyCurrent();
