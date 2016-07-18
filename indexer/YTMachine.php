@@ -28,8 +28,6 @@ define('YT_MIN_VALID_LINES', 5);    // lines per CC
 class YTMachine
 {
     // cloud console data
-    const OAUTH_EMAIL_FILE = '/../../crawler-key-gapi.email.txt';
-    const OAUTH_P12_FILE = '/../../crawler-key-gapi.p12';
     const SERVICE_ACCOUNT_OAUTH_FILE = '/../../crawler-key-gapi.json';
 
     // list of permissions we need
@@ -38,8 +36,8 @@ class YTMachine
     function __construct()
     {
         self::$googleClient = new Google_Client();
-        self::$googleClient->setScopes($this->scopes);
         self::$googleClient->setAuthConfig(__DIR__ . self::SERVICE_ACCOUNT_OAUTH_FILE);
+        self::$googleClient->setScopes($this->scopes);
     }
 
     /**
@@ -64,7 +62,8 @@ class YTMachine
                 $totalResults = $listResults->getPageInfo()->totalResults;
                 $perPageResults = $listResults->getPageInfo()->resultsPerPage;
                 echo 'Loading ' . $maxCount . ' results from ' . $totalResults . ' in batches of '
-                    . $perPageResults . ' for query ' . $criteria->getQuery() . "\n";
+                    . $perPageResults . ' for query ' . $criteria->getQuery() . "\n Criteria: ";
+                print_r($criteria->getArray());
             }
 
             // parse the list of results for per-video information
@@ -262,8 +261,15 @@ class YTVideo
             die('Expecting 1 item, got ' . sizeof($items));
         $item = $items[0];
 
-        // counters
+        // counters (all properties are detailed here: https://developers.google.com/youtube/v3/docs/videos)
+        /* @var $stat Google_Service_YouTube_VideoStatistics */
         $stat = $item->getStatistics();
+        /* @var $sus Google_Service_YouTube_VideoStatus
+        $sus = $item->getStatus();
+        if ($sus->getEmbeddable() == false) {
+            print_r($sus);
+            die('NOT EMB');
+        }*/
         $this->countViews = intval($stat->getViewCount());
         $this->countComments = intval($stat->getCommentCount());
         $this->countLikes = intval($stat->getLikeCount());
@@ -280,8 +286,13 @@ class YTVideo
         $this->channelTitle = $snip->getChannelTitle();
         $this->tags = $snip->getTags();
 
-        // duration (ignoring: definition(hd), dimension(2d), caption(true), contentRating, countryRestriction, regionRestriction)
+        // duration (ignoring: definition(hd), dimension(2d), contentRating, countryRestriction, regionRestriction)
         $cDet = $item->getContentDetails();
+        if ($cDet->getCaption() == "false") {
+            if (YT_VIOLENT)
+                die('video.contentDetails.caption:false on ' . $this->videoId);
+            $this->lastResolveDetailsIssue .= ' c';
+        }
         $dt = new DateInterval($cDet->getDuration());
         $this->duration = $dt->h * 3600 + $dt->i * 60 + $dt->s;
     }
@@ -415,12 +426,16 @@ class YTVideo
             // FILTER: parse and validate XML
             try {
                 $ccTranscript = new SimpleXMLElement($ccString);
-                if (YT_VIOLENT && $ccTranscript->getName() != 'transcript')
-                    die('expected a transcript root element, got a ' . $ccTranscript->getName() . ' instead ');
+                if ($ccTranscript->getName() != 'transcript') {
+                    if (YT_VIOLENT)
+                        die('expected a transcript root element, got a ' . $ccTranscript->getName() . ' instead ');
+                    $this->lastResolveCaptionsIssue .= ' x-1';
+                    continue;
+                }
             } catch (Exception $e) {
                 if (YT_VERBOSE)
                     echo 'skipping for xml parsing error' . $ccVideoId . "\n";
-                $this->lastResolveCaptionsIssue .= ' x';
+                $this->lastResolveCaptionsIssue .= ' x-2';
                 continue;
             }
 
@@ -591,7 +606,7 @@ class YTSearchCriteria
 {
     private $criteria = [];
 
-    function __construct($query)
+    function __construct($query, $findOnlyHD)
     {
         $this->criteria['q'] = $query;
         $this->criteria['type'] = 'video';
@@ -604,7 +619,7 @@ class YTSearchCriteria
         //$this->criteria['paidContent'] = 'false';
         $this->setLanguage(YT_LANG_FILTER, YT_REGION_FILTER);
         $this->setResultsPageSize(40);
-        $this->setHD(true);
+        $this->setHD($findOnlyHD);
     }
 
     /**

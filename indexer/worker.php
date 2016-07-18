@@ -21,7 +21,9 @@ if ($workingQuery == null)
     die("no jobs for me\n");
 
 // configuration
-const VIDEOS_PER_QUERY = 100;
+const QUERY_HD_ONLY = false;
+const QUERY_RESULTS_COUNT = 100;
+const QUERY_SORTING_SEQUENCE = ['relevance', 'viewCount', 'rating', /*'date' no date, since they don't have enough views usually */];
 const MIN_VIDEO_VIEWS = 2000;
 const FORCE_REINDEX = false;
 define('VIDEOS_PROCESSED_SET', 'jam_videos_processed');
@@ -42,24 +44,24 @@ do {
     echo $outPrefix . "started\n";
     $someQueries = [ $workingQuery ];
 
-    // search youtube for N queries, for M (4) ordering criteria
+    // search youtube for N queries, for M (3) ordering criteria
     /* @var $videoLeads YTVideo[] */
     $videoLeads = [];
-    $orders = ['relevance', 'viewCount', 'rating', 'date'];
     foreach ($someQueries as $query) {
-        foreach ($orders as $order) {
+        foreach (QUERY_SORTING_SEQUENCE as $order) {
 
             // search for the current Query, using each of the 4 criteria...
-            $criteria = new YTSearchCriteria(trim($query));
+            $criteria = new YTSearchCriteria(trim($query), QUERY_HD_ONLY);
             $criteria->setOrder($order);
-            $videos = $ytMachine->searchVideos($criteria, VIDEOS_PER_QUERY);
+            $videos = $ytMachine->searchVideos($criteria, QUERY_RESULTS_COUNT);
+
             // ...and merge into 1 list
             $ytMachine->mergeUniqueVideos($videoLeads, $videos);
 
         }
     }
-    echo $outPrefix . sizeof($videoLeads) . " found\n";
-    echo $outPrefix . 'processing [';
+    echo $outPrefix . sizeof($videoLeads) . " videos merged from " . sizeof(QUERY_SORTING_SEQUENCE) . " searches\n";
+    echo $outPrefix . 'fetching and indexing [';
 
     // process each video: get caption, get details, send to index
     /* @var $videoLeads YTVideo[] */
