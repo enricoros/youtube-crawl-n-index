@@ -22,6 +22,7 @@ define('IM_VERBOSE', true);
 class IndexMachine_Algolia implements IndexMachine
 {
     // cloud console data
+    const INDEX_NAME = 'yt_cc';
     const ALGOLIA_API_ID_FILE = '/../../crawler-id-algolia.txt';
     const ALGOLIA_API_KEY_FILE = '/../../crawler-key-algolia.txt';
 

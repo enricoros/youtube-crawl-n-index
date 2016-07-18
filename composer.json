@@ -7,6 +7,7 @@
         "guzzlehttp/guzzle": "~6.2",
         "predis/predis": "1.0.x-dev",
         "elasticsearch/elasticsearch": "~2.0",
+        "monolog/monolog": "~1.0",
         "algolia/algoliasearch-client-php": "1.6.0"
     },
     "authors": [

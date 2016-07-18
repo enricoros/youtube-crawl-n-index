@@ -509,6 +509,7 @@ class YTVideo
     /**
      * @param $objectID String the ID of the object in the Search system
      * @return array Object to be uploaded to the Indexing - this defines our search ABI
+     * @deprecated remove after the full conversion to Elastic
      */
     public function toSearchable($objectID)
     {
@@ -544,6 +545,40 @@ class YTVideo
             "_tags" => $this->tags
         ];
         return array_merge($videoObj, $this->ytCC->toSearchable());
+    }
+
+    public function toElastic()
+    {
+        return [
+            'content' => [
+                'title' => $this->title,
+                'duration' => $this->duration,
+                'description' => $this->description,
+                'language' => $this->language,
+                'regionCode' => $this->regionCode,
+                'isHD' => $this->isHD,
+                'desktopUrl' => $this->desktopUrl,
+                'thumbUrl' => $this->thumbUrl,
+                'publishedAt' => $this->publishedAt
+            ],
+            'channel' => [
+                'id' => $this->channelId,
+                'title' => $this->channelTitle
+            ],
+            'stats' => [
+                'countViews' => $this->countViews,
+                'countComments' => $this->countComments,
+                'countLikes' => $this->countLikes,
+                'countDislikes' => $this->countDislikes,
+                'countFavorites' => $this->countFavorites,
+                'pctComments' => $this->pctComments,
+                'pctLikes' => $this->pctLikes,
+                'pctDislikes' => $this->pctDislikes,
+                'pctFavorites' => $this->pctFavorites
+            ],
+            'cc' => $this->ytCC->toElastic(),
+            'tags' => $this->tags
+        ];
     }
 
     private function fixSrv1Caption($line)
@@ -588,6 +623,7 @@ class YTCC
 
     /**
      * @return array Object to be uploaded to the Indexing - this defines our search ABI
+     * @deprecated Remove after migration to Elastic
      */
     public function toSearchable()
     {
@@ -597,6 +633,20 @@ class YTCC
             "ccSize" => $this->ccSize,
             "lastUpdated" => $this->lastUpdated,
             "text" => $this->text
+        ];
+    }
+
+    /**
+     * @return array Object to be uploaded to the Indexing - this defines our search ABI
+     */
+    public function toElastic()
+    {
+        return [
+            'id' => $this->ccId,
+            'lastUpdated' => $this->lastUpdated,
+            'size' => $this->ccSize,
+            'trackName' => $this->ccTrackName,
+            'text' => $this->text
         ];
     }
 

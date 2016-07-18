@@ -21,20 +21,22 @@ if ($workingQuery == null)
     die("no jobs for me\n");
 
 // configuration
-const QUERY_HD_ONLY = false;
+const QUERY_HD_ONLY = true;
 const QUERY_RESULTS_COUNT = 100;
 const QUERY_SORTING_SEQUENCE = ['relevance', 'viewCount', 'rating', /*'date' no date, since they don't have enough views usually */];
 const MIN_VIDEO_VIEWS = 2000;
 const FORCE_REINDEX = false;
 define('VIDEOS_PROCESSED_SET', 'jam_videos_processed');
-define('VIDEOS_INDEXED_SET_NAME', 'jam_videos_indexed');
+//define('VIDEOS_INDEXED_SET_NAME', 'jam_videos_indexed');
 
 // create the global objects
 require_once 'YTMachine.php';
 $ytMachine = new \YTMachine();
 
-require_once 'IndexMachine_Algolia.php';
-$indexMachine = new \IndexMachine_Algolia(isset($_GET['index']) ? 'yt_' . $_GET['index'] : '');
+//require_once 'IndexMachine_Algolia.php';
+//$indexMachine = new \IndexMachine_Algolia(isset($_GET['index']) ? 'yt_' . $_GET['index'] : '');
+require_once 'IndexMachine_ElasticSearch.php';
+$indexMachine = new \IndexMachine_ElasticSearch(['173.230.144.120:9199']);
 
 
 // loop until there's work
@@ -98,7 +100,7 @@ do {
 
         // video processed, all details are present, subtitles downloaded and indexed
         array_push($newVideos, $video);
-        CacheMachine::addToSet(VIDEOS_INDEXED_SET_NAME, $video->videoId);
+        //CacheMachine::addToSet(VIDEOS_INDEXED_SET_NAME, $video->videoId);
         echo '.';
     }
     echo "]\n";

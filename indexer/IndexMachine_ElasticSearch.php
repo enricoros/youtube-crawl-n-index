@@ -17,119 +17,182 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once 'IndexMachine.php';
 
 define('IM_VIOLENT', true);
-define('IM_VERBOSE', true);
+define('IM_VERBOSE', false);
+// WARNING: if you set this to true, it will destroy and recreate the index for every instance!
+define('FORCE_RE_CREATE_INDEX', false);
 
 class IndexMachine_ElasticSearch implements IndexMachine
 {
-    const IM_TYPE = 'youtube';
+    const INDEX_NAME = 'jam';
+    const INDEX_TYPE = 'ccv3';
 
+    /* @var $client \Elasticsearch\Client */
     private $client;
-    private $defaultIndex;
-
-    function __construct($hostname)
-    {
-        $this->client = new Elasticsearch\Client([
-            'hosts' => [$hostname]
-        ]);
-        $this->defaultIndex = new TypedIndex(self::INDEX_NAME, self::IM_TYPE, $this->client);
-    }
-
-    public function addOrUpdate($objectID, $ytVideo)
-    {
-        $params = [
-            'index' => self::INDEX_NAME,
-            'type' => self::IM_TYPE,
-            'id' => $objectID,
-            'ignore' => [400, 404]
-        ];
-        echo $this->client->get($params);
-    }
-
-}
-
-class TypedIndex
-{
-    private $client;
-    private $indexParams;
-    private $typeParams;
 
     /**
-     * @param $indexName String
-     * @param $typeName String
-     * @param $client Elasticsearch\Client
+     * @param $hosts array
      */
-    public function __construct($indexName, $typeName, $client)
+    function __construct($hosts)
     {
-        $this->client = $client;
-        $this->indexParams = [
-            'index' => $indexName
-            /*, 'ignore' => [400, 404]*/
+        // create and connect the client
+        $this->client = Elasticsearch\ClientBuilder::create()
+            ->setHosts($hosts)
+            //->setLogger(Elasticsearch\ClientBuilder::defaultLogger('/tmp/log.log'))
+            ->build();
+
+        // create and configure the index, if missing
+        $this->createIndex();
+    }
+
+    /**
+     * @param $objectID String the objectId
+     * @param $ytVideo YTVideo a valid object to index - transformation will happen inside, not outside
+     * @return bool true if the operation was successful
+     */
+    public function addOrUpdate($objectID, $ytVideo)
+    {
+        $payload = [
+            'id' => $objectID,
+            'index' => self::INDEX_NAME,
+            'type' => self::INDEX_TYPE,
+            'body' => $ytVideo->toElastic()
         ];
-        $this->typeParams = [
-            'index' => $indexName,
-            'type' => $typeName
-            /*, 'ignore' => [400, 404]*/
-        ];
-        $this->ensureIsThere();
-        $this->singleDocumentIndex();
+        $response = $this->client->index(
+            $payload
+        );
+        // creation ok
+        if ($response['created'] == 1)
+            return true;
+        // update ok
+        if ($response['_version'] > 1)
+            return true;
+
+        // or handle error
+        if (IM_VERBOSE) {
+            echo "Error creating/updating object " . $objectID . ": ";
+            print_r($response);
+        }
+        if (IM_VIOLENT)
+            die('Fix creation.');
+        return false;
     }
 
 
-    public function singleDocumentIndex()
+    private function tempSearch() {
+        /*
+{
+  "query": {
+    "nested": {
+      "path": "cc.text",
+      "query": {
+        "match": {
+          "cc.text.t": "any word matched"
+        }
+      }
+    }
+  }
+}
+{
+  "query": {
+    "nested": {
+      "path": "cc.text",
+      "query": {
+        "match": {
+          "cc.text.t": {
+            "query": "thank you",
+            "operator": "and"
+          }
+        }
+      }
+    }
+  }
+}
+        */
+    }
+
+    private function createIndex()
     {
-        $index = $client->initIndex('YourIndexName');
-
-        $params = $this->typeParams;
-        /*$params = [
-            'body' => [ 'test' => 'enrico' ],
-            'index' =>
-        ];*/
-
-        //$params['index'] = 'my_index';
-        //$params['type']  = 'my_type';
-        $params['id'] = 'my_id';
-
-        $p2 = $this->typeParams;
-        $p3 = $params;
-
-// Document will be indexed to my_index/my_type/my_id
-        //$ret = $client->index($params);
+        // skip if it already exists
+        if ($this->client->indices()->exists(['index' => self::INDEX_NAME])) {
+            if (IM_VERBOSE)
+                echo "Index " . self::INDEX_NAME . " already exists. Skipping creation.\n";
+            // WARNING: the following will destroy all data
+            if (FORCE_RE_CREATE_INDEX)
+                $this->client->indices()->delete(['index' => self::INDEX_NAME]);
+            else
+                return true;
+        }
+        $params = [
+            'index' => self::INDEX_NAME,
+            'body' => [
+                'settings' => [
+                    'number_of_shards' => 4,
+                    'number_of_replicas' => 0
+                ],
+                'mappings' => [
+                    self::INDEX_TYPE => [
+                        '_source' => [
+                            'enabled' => true
+                        ],
+                        'properties' => [
+                            'content' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'publishedAt' => [
+                                        'type' => 'date',
+                                        'format' => 'strict_date_optional_time||epoch_millis'
+                                    ]
+                                ]
+                            ],
+                            'channel' => [
+                                'type' => 'object'
+                            ],
+                            'stats' => [
+                                'type' => 'object'
+                            ],
+                            'cc' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'text' => [
+                                        'type' => 'nested',
+                                        'properties' => [
+                                            't' => [
+                                                'type' => 'string',
+                                                'analyzer' => 'standard'
+                                            ],
+                                            'tr' => [
+                                                'type' => 'string',
+                                                'index' => 'not_analyzed'
+                                            ],
+                                            's' => [
+                                                'type' => 'float'
+                                            ],
+                                            'e' => [
+                                                'type' => 'float'
+                                            ],
+                                            'd' => [
+                                                'type' => 'float'
+                                            ]
+                                        ]
+                                    ],
+                                    'lastUpdates' => [
+                                        'type' => 'date',
+                                        'format' => 'strict_date_optional_time||epoch_millis'
+                                    ],
+                                    'trackName' => [
+                                        'enabled' => false
+                                    ]
+                                ]
+                            ],
+                            'tags' => [
+                                'type' => 'string'
+                            ]
+                        ]
+                    ]
+                ]
+            ]];
+        $response = $this->client->indices()->create($params);
+        return $response['acknowledged'] == 1;
     }
-
-
-    public function getName()
-    {
-        return $this->indexParams['index'];
-    }
-
-    public function getType()
-    {
-        return $this->typeParams['type'];
-    }
-
-
-    private function ensureIsThere()
-    {
-        if (!$this->client->indices()->exists($this->indexParams))
-            $this->client->indices()->create($this->indexParams);
-        $this->drop();
-    }
-
-    private function drop()
-    {
-        if ($this->client->indices()->exists($this->indexParams))
-            $this->client->indices()->delete($this->indexParams);
-    }
-
-
-    /*        $arr =
-
-            $updateParams['index']          = 'my_index';
-            $updateParams['type']           = 'my_type';
-            $updateParams['id']             = 'my_id';
-            $updateParams['body']['doc']    = array('my_key' => 'new_value');
-
-            $retUpdate = $client->update($updateParams);
-        }*/
 
 }
