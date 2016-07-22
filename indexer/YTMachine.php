@@ -562,6 +562,7 @@ class YTVideo
     public function toElastic()
     {
         return [
+//            'jam' => [], // variables/dynamic attributes for the jam operation
             'content' => [
                 'title' => $this->title,
                 'duration' => $this->duration,

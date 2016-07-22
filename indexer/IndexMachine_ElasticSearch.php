@@ -51,14 +51,14 @@ class IndexMachine_ElasticSearch implements IndexMachine
      */
     public function addOrUpdate($objectID, $ytVideo)
     {
-        $payload = [
+        $params = [
             'id' => $objectID,
             'index' => self::INDEX_NAME,
             'type' => self::INDEX_TYPE,
             'body' => $ytVideo->toElastic()
         ];
         $response = $this->client->index(
-            $payload
+            $params
         );
         // creation ok
         if ($response['created'] == 1)
@@ -77,8 +77,88 @@ class IndexMachine_ElasticSearch implements IndexMachine
         return false;
     }
 
+    public function search($query, $matchPhrase, $maxVideos, $maxSnippetsPerVideo)
+    {
+        // query DSL
+        $paramsDSL = [
+            '_source' => ['content', 'channel', 'stats' /*, 'tags'*/],
+            'query' => [
+                'nested' => [
+                    'path' => 'cc.text',
+                    'score_mode' => 'avg',
+                    'query' => [
+                        ($matchPhrase ? 'match_phrase' : 'match') => [
+                            'cc.text.t' => $query
+                        ]
+                    ],
+                    "inner_hits" => [
+                        "size" => $maxSnippetsPerVideo
+                    ]
+                ]
+            ]
+        ];
+        print_r(json_encode($paramsDSL), JSON_PRETTY_PRINT);
 
-    private function tempSearch() {
+        // search query
+        $params = [
+            'index' => self::INDEX_NAME,
+            'type' => self::INDEX_TYPE,
+            'size' => $maxVideos,
+            'body' => $paramsDSL
+        ];
+        $r = $this->client->search($params);
+
+        // transform JSON, extract Snippets, Videos
+        $dVideos = [];
+        $dSnippets = [];
+        foreach ($r['hits']['hits'] as $docsHit) {
+            $docYtVideoId = $docsHit['_id'];
+            $docAvgScore = $docsHit['_score'];
+            $docYtVideo = array_merge([
+                'id' => $docYtVideoId,
+                'avgSnippetScore' => $docAvgScore
+            ], $docsHit['_source']);
+            if (array_key_exists($docYtVideoId, $dVideos))
+                die('FIXME: DUPLICATE ID?');
+            $dVideos[$docYtVideoId] = $docYtVideo;
+
+            $textHits = $docsHit['inner_hits']['cc.text']['hits']['hits'];
+            foreach ($textHits as $i => $textHit) {
+                $dSnippets[] = [
+                    'video_id' => $textHit['_id'],
+                    'score' => $textHit['_score'],
+                    't' => $textHit['_source']['t'],
+                    's' => $textHit['_source']['s'],
+                    'd' => $textHit['_source']['d'],
+                    'e' => $textHit['_source']['e']
+                ];
+            }
+        }
+        // sort snippets in order of descending score
+        usort($dSnippets, function ($a, $b) {
+            return $b['score'] > $a['score'] ? 1 : -1;
+        });
+
+        // this is the contract with the web json consumer
+        $d = [
+            'stats' => [
+                'duration' => $r['took'],
+                'timeout' => $r['timed_out'],
+                'hits' => $r['hits']['total'],
+                'maxAvgSnippetScore' => $r['hits']['max_score'],
+                'snippetsCount' => sizeof($dSnippets),
+                'videosCount' => sizeof($dVideos)
+            ],
+            'snippets' => $dSnippets,
+            'videos' => $dVideos
+        ];
+
+        return $d;
+    }
+
+
+    private function tempSearch()
+    {
         /*
 {
   "query": {
