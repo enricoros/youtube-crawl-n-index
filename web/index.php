@@ -87,6 +87,7 @@ if (!$isAdmin)
             <div id="index-button" class="button tiny round warning" onclick="addToIndex();">+Add to Crawling Queue
             </div>
             &nbsp;
+            <div class="button tiny round" onclick="performSearch();">Search JAM</div>
             <div class="button tiny round" onclick="tryYoutube();">Try on Youtube</div>
         </div>
         <div class="medium-12 columns">
@@ -181,6 +182,12 @@ if (!$isAdmin)
                     alert(status + ": can't add to the index: " + msg);
                 });
         }
+    }
+
+    function performSearch() {
+        var query = $queryInput.val();
+        if (query.length > 1)
+            window.location.href = window.location.origin + '/crawler/search.php?q=' + encodeURI(query);
     }
 
     // enter on query to add to index
