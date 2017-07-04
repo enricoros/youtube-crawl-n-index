@@ -119,7 +119,8 @@ class IndexMachine_ElasticSearch implements IndexMachine
                 'avgSnippetScore' => $docAvgScore
             ], $docsHit['_source']);
             if (array_key_exists($docYtVideoId, $dVideos))
-                die('FIXME: DUPLICATE ID?');
+                if (IM_VIOLENT)
+                    die('FIXME: duplicate video id?');
             $dVideos[$docYtVideoId] = $docYtVideo;
 
             $textHits = $docsHit['inner_hits']['cc.text']['hits']['hits'];
@@ -142,12 +143,12 @@ class IndexMachine_ElasticSearch implements IndexMachine
         // this is the contract with the web json consumer
         $d = [
             'stats' => [
-                'duration' => $r['took'],
-                'timeout' => $r['timed_out'],
+                'duration' => $r['took'] / 1000.0,
                 'hits' => $r['hits']['total'],
-                'maxAvgSnippetScore' => $r['hits']['max_score'],
+                'videosCount' => sizeof($dVideos),
                 'snippetsCount' => sizeof($dSnippets),
-                'videosCount' => sizeof($dVideos)
+//                'timeout' => $r['timed_out'],
+                'maxAvgVideoScore' => $r['hits']['max_score']
             ],
             'snippets' => $dSnippets,
             'videos' => $dVideos

@@ -443,14 +443,25 @@ class YTVideo
             $lines = [];
             $maxLength = 0;
             foreach ($ccTranscript->text AS $line) {
-                $text = $this->fixSrv1Caption(strval($line));
+                $text = trim($this->fixSrv1Caption(strval($line)));
+                $textLength = strlen($text);
+
+                // TODO: totally need to do a better job here to convert all of the possible conventions
+                // of the subtitles into some plain text english (there are names, unicode chars, html tags, etc..)
 
                 // fix quoted strings
-                if (strlen($text) > YT_MIN_VALID_CHARS && substr($text, 0, 1) == '"' && substr($text, -1) == '"')
-                    $text = substr($text, 1, -1);
+                if ($textLength > YT_MIN_VALID_CHARS && substr($text, 0, 1) == '"' && substr($text, -1) == '"') {
+                    $text = trim(substr($text, 1, -1));
+                    $textLength = strlen($text);
+                }
+
+                // remove "- " at the beginning
+                if ($textLength > YT_MIN_VALID_CHARS && substr($text, 0, 2) == '- ') {
+                    $text = trim(substr($text, 2));
+                    $textLength = strlen($text);
+                }
 
                 // skip lines with less than YT_MIN_VALID_CHARS chars
-                $textLength = strlen($text);
                 if ($textLength < YT_MIN_VALID_CHARS || $textLength > YT_MAX_VALID_CHARS)
                     continue;
 
